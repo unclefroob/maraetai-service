@@ -10,7 +10,7 @@ import (
 
 // Config holds the proxy's runtime configuration.
 type Config struct {
-	// ListenAddr is the address the proxy listens on, e.g. ":8080".
+	// ListenAddr is the address the proxy listens on, e.g. ":4534".
 	ListenAddr string
 	// NavidromeURL is the upstream Navidrome base URL, e.g. "http://navidrome:4533".
 	NavidromeURL *url.URL
@@ -37,7 +37,7 @@ func Load() (*Config, error) {
 
 	addr := strings.TrimSpace(os.Getenv("LISTEN_ADDR"))
 	if addr == "" {
-		addr = ":8080"
+		addr = ":4534"
 	}
 
 	dbPath := strings.TrimSpace(os.Getenv("DB_PATH"))

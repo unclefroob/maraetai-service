@@ -66,15 +66,15 @@ endpoint we don't explicitly handle are never on a special code path.
 | Env var          | Required | Default  | Description                              |
 | ---------------- | -------- | -------- | ---------------------------------------- |
 | `NAVIDROME_URL`  | yes      | —                  | Upstream Navidrome base URL    |
-| `LISTEN_ADDR`    | no       | `:8080`            | Address the proxy listens on   |
+| `LISTEN_ADDR`    | no       | `:4534`            | Address the proxy listens on   |
 | `DB_PATH`        | no       | `./data/maraetai.db` | SQLite play-history database  |
 
 ## Run locally
 
 ```sh
 NAVIDROME_URL=http://localhost:4533 go run .
-# proxy now on http://localhost:8080 — point a Maraetai app there
-# web app at http://localhost:8080/app/ (sign in with Navidrome credentials)
+# proxy now on http://localhost:4534 — point a Maraetai app there
+# web app at http://localhost:4534/app/ (sign in with Navidrome credentials)
 ```
 
 The SPA is plain ES modules + CSS embedded via `go:embed` (no build step / no
@@ -105,7 +105,7 @@ reaches it by container name — nothing about your Navidrome setup changes:
 export NAVIDROME_URL=http://navidrome:4533
 export NAVIDROME_NETWORK=navidrome_default     # see the file's header to find yours
 docker compose -f docker-compose.existing.yml up -d
-# point the Maraetai apps at http://<host>:8080
+# point the Maraetai apps at http://<host>:4534
 ```
 
 Or without compose:
@@ -114,7 +114,7 @@ Or without compose:
 docker run -d --name maraetai-service \
   --network <your-navidrome-network> \
   -e NAVIDROME_URL=http://<navidrome-container>:4533 \
-  -p 8080:8080 -v maraetai-data:/data \
+  -p 4534:4534 -v maraetai-data:/data \
   ghcr.io/unclefroob/maraetai-service:latest
 ```
 
@@ -129,7 +129,7 @@ For a new setup, `docker-compose.yml` runs both:
 ```sh
 cp .env.example .env   # set MUSIC_DIR to your library
 docker compose up -d
-# apps connect to http://<host>:8080
+# apps connect to http://<host>:4534
 ```
 
 ## Test

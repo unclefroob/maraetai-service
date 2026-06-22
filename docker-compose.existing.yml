@@ -5,7 +5,7 @@
 #    (for a compose-managed Navidrome it's usually "<project>_default", e.g. navidrome_default)
 # 2. Set the two values below (env or a .env file next to this file), then:
 #       docker compose -f docker-compose.existing.yml up -d
-# 3. Point the Maraetai apps at http://<host>:8080
+# 3. Point the Maraetai apps at http://<host>:4534
 #
 #   NAVIDROME_URL     – how to reach Navidrome from inside Docker, by container/
 #                       service name (NOT localhost): e.g. http://navidrome:4533
@@ -20,7 +20,7 @@ services:
     volumes:
       - maraetai-data:/data
     ports:
-      - "8080:8080"
+      - "4534:4534"
     networks:
       - navidrome
 

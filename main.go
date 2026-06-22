@@ -77,11 +77,11 @@ func main() {
 func runHealthcheck() int {
 	addr := os.Getenv("LISTEN_ADDR")
 	if addr == "" {
-		addr = ":8080"
+		addr = ":4534"
 	}
 	_, port, err := net.SplitHostPort(addr)
 	if err != nil || port == "" {
-		port = "8080"
+		port = "4534"
 	}
 	client := &http.Client{Timeout: 3 * time.Second}
 	resp, err := client.Get("http://127.0.0.1:" + port + "/healthz")

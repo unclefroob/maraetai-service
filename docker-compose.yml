@@ -1,5 +1,5 @@
 # Runs the proxy as a sidecar in front of Navidrome.
-# Point your Maraetai apps at http://<host>:8080 instead of the Navidrome port.
+# Point your Maraetai apps at http://<host>:4534 instead of the Navidrome port.
 services:
   navidrome:
     image: deluan/navidrome:latest
@@ -18,11 +18,11 @@ services:
     restart: unless-stopped
     environment:
       NAVIDROME_URL: http://navidrome:4533
-      LISTEN_ADDR: ":8080"
+      LISTEN_ADDR: ":4534"
       DB_PATH: /data/maraetai.db
     volumes:
       - ./data/maraetai-service:/data
     ports:
-      - "8080:8080"
+      - "4534:4534"
     depends_on:
       - navidrome

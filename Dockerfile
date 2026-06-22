@@ -11,7 +11,7 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/maraetai-service .
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/maraetai-service /maraetai-service
-EXPOSE 8080
+EXPOSE 4534
 # The binary checks its own /healthz (no shell/curl in distroless).
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
     CMD ["/maraetai-service", "healthcheck"]
