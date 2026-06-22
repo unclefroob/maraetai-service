@@ -35,6 +35,25 @@ func fakeNavidrome(t *testing.T, scrobbleHits *int32) *httptest.Server {
 	}
 	mux.HandleFunc("/rest/scrobble", scrobble)
 	mux.HandleFunc("/rest/scrobble.view", scrobble)
+	// getArtist returns two album stubs; getAlbum returns that album's songs.
+	mux.HandleFunc("/rest/getArtist.view", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"subsonic-response":{"status":"ok","artist":{"id":"art1","name":"Massive Attack","album":[{"id":"al1"},{"id":"al2"}]}}}`)
+	})
+	mux.HandleFunc("/rest/getAlbum.view", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Query().Get("id") {
+		case "al1":
+			_, _ = io.WriteString(w, `{"subsonic-response":{"status":"ok","album":{"id":"al1","song":[
+				{"id":"s1","title":"Angel","artist":"Massive Attack","album":"Mezzanine","albumId":"al1","duration":379},
+				{"id":"s2","title":"Teardrop","artist":"Massive Attack","album":"Mezzanine","albumId":"al1","duration":331}]}}}`)
+		case "al2":
+			_, _ = io.WriteString(w, `{"subsonic-response":{"status":"ok","album":{"id":"al2","song":[
+				{"id":"s3","title":"Protection","artist":"Massive Attack","album":"Protection","albumId":"al2","duration":468}]}}}`)
+		default:
+			_, _ = io.WriteString(w, `{"subsonic-response":{"status":"failed","error":{"code":70,"message":"not found"}}}`)
+		}
+	})
 	// ping for forward-and-validate auth: bad token => failed status (200).
 	mux.HandleFunc("/rest/ping.view", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

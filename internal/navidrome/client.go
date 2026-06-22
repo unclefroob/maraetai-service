@@ -1,6 +1,6 @@
 // Package navidrome is a minimal client for the upstream Subsonic API, used to
-// resolve song metadata that scrobble requests don't carry (they send only an
-// id + time).
+// resolve content (song metadata, an artist's albums, an album's songs) that
+// the proxy's own endpoints need.
 package navidrome
 
 import (
@@ -26,7 +26,7 @@ func New(base *url.URL) *Client {
 	}
 }
 
-// Song is the subset of Subsonic song metadata we snapshot.
+// Song is the subset of Subsonic song metadata we use.
 type Song struct {
 	ID       string `json:"id"`
 	Title    string `json:"title"`
@@ -37,26 +37,88 @@ type Song struct {
 	Duration int    `json:"duration"`
 }
 
+// Album is an album stub (id is all we need to fetch its songs).
+type Album struct {
+	ID string `json:"id"`
+}
+
+type apiError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+}
+
 type songResponse struct {
 	Response struct {
-		Status string `json:"status"`
-		Song   *Song  `json:"song"`
-		Error  *struct {
-			Code    int    `json:"code"`
-			Message string `json:"message"`
-		} `json:"error"`
+		Status string    `json:"status"`
+		Song   *Song     `json:"song"`
+		Error  *apiError `json:"error"`
 	} `json:"subsonic-response"`
 }
 
-// GetSong fetches metadata for a song id. The caller passes the Subsonic auth
-// params (u, t, s / p, c, v) from the originating request so this reuses the
-// same credentials — no separate auth needed.
+type artistResponse struct {
+	Response struct {
+		Status string `json:"status"`
+		Artist *struct {
+			Album []Album `json:"album"`
+		} `json:"artist"`
+		Error *apiError `json:"error"`
+	} `json:"subsonic-response"`
+}
+
+type albumResponse struct {
+	Response struct {
+		Status string `json:"status"`
+		Album  *struct {
+			Song []Song `json:"song"`
+		} `json:"album"`
+		Error *apiError `json:"error"`
+	} `json:"subsonic-response"`
+}
+
+// GetSong fetches metadata for a song id.
 func (c *Client) GetSong(ctx context.Context, id string, auth url.Values) (*Song, error) {
+	var sr songResponse
+	if err := c.get(ctx, "getSong.view", id, auth, &sr); err != nil {
+		return nil, err
+	}
+	if sr.Response.Status != "ok" || sr.Response.Song == nil {
+		return nil, subsonicError(sr.Response.Error, "getSong")
+	}
+	return sr.Response.Song, nil
+}
+
+// GetArtist returns an artist's album stubs, in the server's order.
+func (c *Client) GetArtist(ctx context.Context, id string, auth url.Values) ([]Album, error) {
+	var ar artistResponse
+	if err := c.get(ctx, "getArtist.view", id, auth, &ar); err != nil {
+		return nil, err
+	}
+	if ar.Response.Status != "ok" || ar.Response.Artist == nil {
+		return nil, subsonicError(ar.Response.Error, "getArtist")
+	}
+	return ar.Response.Artist.Album, nil
+}
+
+// GetAlbum returns the songs of an album, in track order.
+func (c *Client) GetAlbum(ctx context.Context, id string, auth url.Values) ([]Song, error) {
+	var ar albumResponse
+	if err := c.get(ctx, "getAlbum.view", id, auth, &ar); err != nil {
+		return nil, err
+	}
+	if ar.Response.Status != "ok" || ar.Response.Album == nil {
+		return nil, subsonicError(ar.Response.Error, "getAlbum")
+	}
+	return ar.Response.Album.Song, nil
+}
+
+// get issues an authenticated Subsonic GET and decodes the JSON body into out.
+// The caller passes the originating request's auth params (u, t, s / p, c, v),
+// so this reuses the same credentials — no separate auth.
+func (c *Client) get(ctx context.Context, endpoint, id string, auth url.Values, out any) error {
 	u := *c.base
-	u.Path = singleJoiningSlash(c.base.Path, "/rest/getSong.view")
+	u.Path = singleJoiningSlash(c.base.Path, "/rest/"+endpoint)
 
 	q := url.Values{}
-	// Carry through only the params getSong needs.
 	for _, k := range []string{"u", "t", "s", "p", "c", "v"} {
 		if v := auth.Get(k); v != "" {
 			q.Set(k, v)
@@ -68,35 +130,35 @@ func (c *Client) GetSong(ctx context.Context, id string, auth url.Values) (*Song
 	if q.Get("v") == "" {
 		q.Set("v", "1.16.1")
 	}
-	q.Set("id", id)
+	if id != "" {
+		q.Set("id", id)
+	}
 	q.Set("f", "json")
 	u.RawQuery = q.Encode()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("getSong request: %w", err)
+		return fmt.Errorf("%s request: %w", endpoint, err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("getSong: upstream status %d", resp.StatusCode)
+		return fmt.Errorf("%s: upstream status %d", endpoint, resp.StatusCode)
 	}
+	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+		return fmt.Errorf("%s decode: %w", endpoint, err)
+	}
+	return nil
+}
 
-	var sr songResponse
-	if err := json.NewDecoder(resp.Body).Decode(&sr); err != nil {
-		return nil, fmt.Errorf("getSong decode: %w", err)
+func subsonicError(e *apiError, endpoint string) error {
+	if e != nil {
+		return fmt.Errorf("%s: subsonic error %d: %s", endpoint, e.Code, e.Message)
 	}
-	if sr.Response.Status != "ok" || sr.Response.Song == nil {
-		if sr.Response.Error != nil {
-			return nil, fmt.Errorf("getSong: subsonic error %d: %s",
-				sr.Response.Error.Code, sr.Response.Error.Message)
-		}
-		return nil, fmt.Errorf("getSong: no song in response")
-	}
-	return sr.Response.Song, nil
+	return fmt.Errorf("%s: empty or failed response", endpoint)
 }
 
 func singleJoiningSlash(a, b string) string {
