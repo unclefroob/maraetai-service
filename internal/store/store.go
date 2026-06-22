@@ -31,6 +31,10 @@ type Play struct {
 	AlbumID  string
 	CoverArt string
 	Duration int
+
+	// Plays is the play count for aggregate queries (e.g. On Repeat); 0 for
+	// single-listen rows.
+	Plays int
 }
 
 // Store wraps the SQLite database.
@@ -283,6 +287,45 @@ func (s *Store) queryRows(ctx context.Context, query string, args []any, fn func
 		}
 	}
 	return rows.Err()
+}
+
+// OnRepeat returns the user's most-replayed songs since `since` — the songs
+// genuinely on repeat, not just recently played. One row per song, play count
+// in Play.Plays, ordered by play count then recency. `minPlays` filters out
+// one-off listens; metadata is the snapshot from the most recent play (SQLite's
+// MAX()+bare-column rule).
+func (s *Store) OnRepeat(ctx context.Context, user string, since time.Time, minPlays, limit int) ([]Play, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	if minPlays <= 0 {
+		minPlays = 1
+	}
+	const q = `SELECT song_id, MAX(played_at) AS pa, client, title, artist, album, album_id, cover_art, duration, COUNT(*) AS plays
+        FROM plays WHERE user = ? AND played_at >= ?
+        GROUP BY song_id
+        HAVING plays >= ?
+        ORDER BY plays DESC, pa DESC
+        LIMIT ?`
+	rows, err := s.db.QueryContext(ctx, q, user, since.Unix(), minPlays, limit)
+	if err != nil {
+		return nil, fmt.Errorf("query on-repeat: %w", err)
+	}
+	defer rows.Close()
+
+	var out []Play
+	for rows.Next() {
+		var p Play
+		var ts int64
+		if err := rows.Scan(&p.SongID, &ts, &p.Client, &p.Title, &p.Artist,
+			&p.Album, &p.AlbumID, &p.CoverArt, &p.Duration, &p.Plays); err != nil {
+			return nil, fmt.Errorf("scan on-repeat: %w", err)
+		}
+		p.User = user
+		p.PlayedAt = time.Unix(ts, 0).UTC()
+		out = append(out, p)
+	}
+	return out, rows.Err()
 }
 
 // Close closes the underlying database.

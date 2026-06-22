@@ -73,6 +73,15 @@ func New(upstream *url.URL, st *store.Store, log *slog.Logger) http.Handler {
 		mux.Handle("/rest/getRecentlyPlayed", recents)
 		mux.Handle("/rest/getRecentlyPlayed.view", recents)
 
+		// On Repeat: the user's most-replayed songs (song-level, from the store).
+		onRepeat := &onRepeatHandler{
+			store: st,
+			auth:  auth.NewValidator(upstream),
+			log:   log,
+		}
+		mux.Handle("/rest/getOnRepeat", onRepeat)
+		mux.Handle("/rest/getOnRepeat.view", onRepeat)
+
 		// M4: JSON stats API + the embedded SPA that consumes it (and the
 		// recents endpoint above). The SPA lives at /app/ so it never shadows
 		// the Subsonic surface forwarded to Navidrome.
