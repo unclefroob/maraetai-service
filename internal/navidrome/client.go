@@ -37,9 +37,10 @@ type Song struct {
 	Duration int    `json:"duration"`
 }
 
-// Album is an album stub (id is all we need to fetch its songs).
+// Album is an album stub. Year lets the caller order a discography.
 type Album struct {
-	ID string `json:"id"`
+	ID   string `json:"id"`
+	Year int    `json:"year"`
 }
 
 type apiError struct {

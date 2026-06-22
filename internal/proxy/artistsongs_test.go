@@ -48,9 +48,9 @@ func TestGetArtistSongsAggregatesInAlbumOrder(t *testing.T) {
 	if len(songs) != 3 {
 		t.Fatalf("want 3 songs across 2 albums, got %d: %+v", len(songs), songs)
 	}
-	// Album order preserved: al1 (s1, s2) then al2 (s3).
+	// Newest-first: al2 (2010 → s3) before al1 (1998 → s1, s2).
 	got := []string{songs[0].ID, songs[1].ID, songs[2].ID}
-	want := []string{"s1", "s2", "s3"}
+	want := []string{"s3", "s1", "s2"}
 	for i := range want {
 		if got[i] != want[i] {
 			t.Errorf("order = %v, want %v", got, want)

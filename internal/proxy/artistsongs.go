@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"sort"
 	"sync"
 
 	"github.com/unclefroob/maraetai-service/internal/navidrome"
@@ -45,6 +46,9 @@ func (h *artistSongsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		subsonic.WriteError(w, q, subsonic.ErrGeneric, "Could not load artist")
 		return
 	}
+
+	// Newest-first, so the discography order matches what the apps expect.
+	sort.SliceStable(albums, func(i, j int) bool { return albums[i].Year > albums[j].Year })
 
 	// Fetch each album's songs concurrently (bounded), keeping album order by
 	// writing into a per-album slot. Failed albums are skipped (best-effort).

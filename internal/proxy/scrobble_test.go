@@ -38,7 +38,7 @@ func fakeNavidrome(t *testing.T, scrobbleHits *int32) *httptest.Server {
 	// getArtist returns two album stubs; getAlbum returns that album's songs.
 	mux.HandleFunc("/rest/getArtist.view", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, `{"subsonic-response":{"status":"ok","artist":{"id":"art1","name":"Massive Attack","album":[{"id":"al1"},{"id":"al2"}]}}}`)
+		_, _ = io.WriteString(w, `{"subsonic-response":{"status":"ok","artist":{"id":"art1","name":"Massive Attack","album":[{"id":"al1","year":1998},{"id":"al2","year":2010}]}}}`)
 	})
 	mux.HandleFunc("/rest/getAlbum.view", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
