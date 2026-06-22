@@ -115,16 +115,38 @@ docker compose -f docker-compose.existing.yml up -d
 Or without compose:
 
 ```sh
-docker run -d --name maraetai-service \
+docker run -d --name maraetai-service --restart unless-stopped \
   --network <your-navidrome-network> \
   -e NAVIDROME_URL=http://<navidrome-container>:4533 \
   -p 4534:4534 -v maraetai-data:/data \
   ghcr.io/unclefroob/maraetai-service:latest
+# point the Maraetai apps at http://<host>:4534
 ```
 
 The proxy doesn't probe Navidrome at startup (it forwards lazily, per request),
 so start order doesn't matter — bring it up before or after Navidrome and it
 works once Navidrome is reachable. The image's `HEALTHCHECK` reports readiness.
+
+**Persistence.** The image runs as a non-root user (uid 65532) and stores the
+play-history DB at `/data/maraetai.db` (baked-in `DB_PATH`). Keep the
+`maraetai-data` volume mounted — omit it and your play history is lost on every
+recreate. A fresh volume gets the right owner automatically; if you attach a
+volume previously written as root, fix its ownership once:
+
+```sh
+docker run --rm -v maraetai-data:/data alpine chown -R 65532:65532 /data
+```
+
+### Updating
+
+The image republishes to GHCR on every push to `main`. To move a running
+container to the latest (the named volume keeps your history):
+
+```sh
+docker pull ghcr.io/unclefroob/maraetai-service:latest
+docker rm -f maraetai-service
+# then re-run the same `docker run …` as above
+```
 
 ### All-in-one (proxy + a fresh Navidrome)
 
