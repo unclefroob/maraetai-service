@@ -14,6 +14,8 @@ type Config struct {
 	ListenAddr string
 	// NavidromeURL is the upstream Navidrome base URL, e.g. "http://navidrome:4533".
 	NavidromeURL *url.URL
+	// DBPath is the path to the SQLite play-history database.
+	DBPath string
 }
 
 // Load reads configuration from the environment and validates it.
@@ -38,8 +40,14 @@ func Load() (*Config, error) {
 		addr = ":8080"
 	}
 
+	dbPath := strings.TrimSpace(os.Getenv("DB_PATH"))
+	if dbPath == "" {
+		dbPath = "./data/maraetai.db"
+	}
+
 	return &Config{
 		ListenAddr:   addr,
 		NavidromeURL: u,
+		DBPath:       dbPath,
 	}, nil
 }

@@ -13,13 +13,18 @@ features. A single binary also serves an embedded SPA (history + stats).
 
 ## Status
 
-- **M0 — Skeleton (this milestone):** transparent reverse proxy. Forwards all
-  traffic to Navidrome unchanged, with streaming-safe pass-through for audio.
-  Point an app at it and everything works exactly as before.
+- **M0 — Skeleton:** transparent reverse proxy. Forwards all traffic to
+  Navidrome unchanged, with streaming-safe pass-through for audio. Point an app
+  at it and everything works exactly as before.
+- **M1 — Play-history capture (current):** `scrobble` requests are tee'd into a
+  SQLite play store before being forwarded untouched. Song metadata (which
+  scrobbles don't carry — only an id + time) is resolved once via upstream
+  `getSong`, cached, and snapshotted on each play so history survives upstream
+  edits/deletes. `submission=false` now-playing pings are forwarded but not
+  recorded. Recording is asynchronous and never blocks the playback path.
 
 Planned:
 
-- **M1** — tee `scrobble` into a SQLite play store (with metadata snapshot).
 - **M2** — `getRecentlyPlayed` endpoint (XML + JSON) + forward-and-validate auth.
 - **M3** — wire the recents call into the Maraetai apps.
 - **M4** — embedded SPA: history timeline + Wrapped-style stats.
@@ -29,7 +34,7 @@ Planned:
 ```
 app → proxy
         ├─ /healthz                       → served locally (no upstream hit)
-        ├─ (M1) /rest/scrobble            → tee: log play, forward unchanged
+        ├─ /rest/scrobble[.view]          → tee: record play, forward unchanged
         ├─ (M2) /rest/getRecentlyPlayed   → served from the play store
         └─ everything else                → streaming reverse proxy → Navidrome
 ```
@@ -43,8 +48,9 @@ endpoint we don't explicitly handle are never on a special code path.
 
 | Env var          | Required | Default  | Description                              |
 | ---------------- | -------- | -------- | ---------------------------------------- |
-| `NAVIDROME_URL`  | yes      | —        | Upstream Navidrome base URL              |
-| `LISTEN_ADDR`    | no       | `:8080`  | Address the proxy listens on             |
+| `NAVIDROME_URL`  | yes      | —                  | Upstream Navidrome base URL    |
+| `LISTEN_ADDR`    | no       | `:8080`            | Address the proxy listens on   |
+| `DB_PATH`        | no       | `./data/maraetai.db` | SQLite play-history database  |
 
 ## Run locally
 

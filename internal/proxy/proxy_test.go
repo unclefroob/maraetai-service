@@ -18,7 +18,7 @@ func newProxy(t *testing.T, upstream *httptest.Server) http.Handler {
 	if err != nil {
 		t.Fatalf("parse upstream: %v", err)
 	}
-	return New(u, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	return New(u, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 }
 
 func TestForwardsTransparently(t *testing.T) {

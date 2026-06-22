@@ -19,6 +19,9 @@ services:
     environment:
       NAVIDROME_URL: http://navidrome:4533
       LISTEN_ADDR: ":8080"
+      DB_PATH: /data/maraetai.db
+    volumes:
+      - ./data/maraetai-service:/data
     ports:
       - "8080:8080"
     depends_on:
