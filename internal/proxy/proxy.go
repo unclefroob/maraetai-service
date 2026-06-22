@@ -87,6 +87,12 @@ func New(upstream *url.URL, st *store.Store, log *slog.Logger) http.Handler {
 		})
 	}
 
+	// getArtistSongs: whole-discography fan-out done server-side, so the client
+	// pays one round-trip. Doesn't need the play store, so it's always offered.
+	artistSongs := &artistSongsHandler{nd: navidrome.New(upstream), log: log}
+	mux.Handle("/rest/getArtistSongs", artistSongs)
+	mux.Handle("/rest/getArtistSongs.view", artistSongs)
+
 	// Catch-all: forward everything else to Navidrome untouched.
 	mux.Handle("/", rp)
 

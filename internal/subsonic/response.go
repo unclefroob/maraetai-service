@@ -43,6 +43,12 @@ type RecentlyPlayed struct {
 	Song []Child `xml:"song" json:"song,omitempty"`
 }
 
+// ArtistSongs is the container for the getArtistSongs response (every song in
+// an artist's discography, in album order).
+type ArtistSongs struct {
+	Song []Child `xml:"song" json:"song,omitempty"`
+}
+
 type apiError struct {
 	Code    int    `xml:"code,attr" json:"code"`
 	Message string `xml:"message,attr" json:"message"`
@@ -57,6 +63,7 @@ type body struct {
 	ServerVersion  string          `xml:"serverVersion,attr,omitempty" json:"serverVersion,omitempty"`
 	Error          *apiError       `xml:"error,omitempty" json:"error,omitempty"`
 	RecentlyPlayed *RecentlyPlayed `xml:"recentlyPlayed,omitempty" json:"recentlyPlayed,omitempty"`
+	ArtistSongs    *ArtistSongs    `xml:"artistSongs,omitempty" json:"artistSongs,omitempty"`
 }
 
 type xmlEnvelope struct {
@@ -72,6 +79,11 @@ type jsonEnvelope struct {
 // WriteRecentlyPlayed writes a successful getRecentlyPlayed response.
 func WriteRecentlyPlayed(w http.ResponseWriter, q url.Values, songs []Child) {
 	write(w, q, body{RecentlyPlayed: &RecentlyPlayed{Song: songs}})
+}
+
+// WriteArtistSongs writes a successful getArtistSongs response.
+func WriteArtistSongs(w http.ResponseWriter, q url.Values, songs []Child) {
+	write(w, q, body{ArtistSongs: &ArtistSongs{Song: songs}})
 }
 
 // WriteError writes a Subsonic error response. Note: Subsonic conveys errors in

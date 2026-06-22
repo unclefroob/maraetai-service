@@ -52,6 +52,7 @@ app → proxy
         ├─ /api/stats                     → JSON listening stats (auth via upstream ping)
         ├─ /rest/scrobble[.view]          → tee: record play, forward unchanged
         ├─ /rest/getRecentlyPlayed[.view] → served from the play store (auth via upstream ping)
+        ├─ /rest/getArtistSongs[.view]    → whole-discography fan-out done server-side (1 client round-trip)
         └─ everything else                → streaming reverse proxy → Navidrome
 ```
 
