@@ -328,6 +328,59 @@ func (s *Store) OnRepeat(ctx context.Context, user string, since time.Time, minP
 	return out, rows.Err()
 }
 
+// ArtistAffinity is a user's play affinity for one artist, with a representative
+// album id (for resolving the artist id upstream).
+type ArtistAffinity struct {
+	Artist     string
+	Plays      int
+	RepAlbumID string
+}
+
+// TopArtists returns the user's most-played artists since `since`, with a
+// representative album id each — the affinity signal behind "Songs for you".
+func (s *Store) TopArtists(ctx context.Context, user string, since time.Time, limit int) ([]ArtistAffinity, error) {
+	if limit <= 0 {
+		limit = 8
+	}
+	const q = `SELECT artist, COUNT(*) AS plays, MAX(album_id) AS rep
+        FROM plays WHERE user = ? AND played_at >= ? AND artist <> ''
+        GROUP BY artist ORDER BY plays DESC, artist LIMIT ?`
+	rows, err := s.db.QueryContext(ctx, q, user, since.Unix(), limit)
+	if err != nil {
+		return nil, fmt.Errorf("query top artists: %w", err)
+	}
+	defer rows.Close()
+	var out []ArtistAffinity
+	for rows.Next() {
+		var a ArtistAffinity
+		if err := rows.Scan(&a.Artist, &a.Plays, &a.RepAlbumID); err != nil {
+			return nil, fmt.Errorf("scan top artists: %w", err)
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+// RecentSongIDs returns the set of song ids the user played since `since` —
+// used to exclude just-heard tracks from recommendations.
+func (s *Store) RecentSongIDs(ctx context.Context, user string, since time.Time) (map[string]struct{}, error) {
+	const q = `SELECT DISTINCT song_id FROM plays WHERE user = ? AND played_at >= ?`
+	rows, err := s.db.QueryContext(ctx, q, user, since.Unix())
+	if err != nil {
+		return nil, fmt.Errorf("query recent ids: %w", err)
+	}
+	defer rows.Close()
+	out := make(map[string]struct{})
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan recent ids: %w", err)
+		}
+		out[id] = struct{}{}
+	}
+	return out, rows.Err()
+}
+
 // Close closes the underlying database.
 func (s *Store) Close() error {
 	return s.db.Close()

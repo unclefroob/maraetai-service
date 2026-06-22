@@ -44,15 +44,52 @@ func fakeNavidrome(t *testing.T, scrobbleHits *int32) *httptest.Server {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Query().Get("id") {
 		case "al1":
-			_, _ = io.WriteString(w, `{"subsonic-response":{"status":"ok","album":{"id":"al1","song":[
+			_, _ = io.WriteString(w, `{"subsonic-response":{"status":"ok","album":{"id":"al1","artistId":"art-ma","song":[
 				{"id":"s1","title":"Angel","artist":"Massive Attack","album":"Mezzanine","albumId":"al1","duration":379},
 				{"id":"s2","title":"Teardrop","artist":"Massive Attack","album":"Mezzanine","albumId":"al1","duration":331}]}}}`)
 		case "al2":
-			_, _ = io.WriteString(w, `{"subsonic-response":{"status":"ok","album":{"id":"al2","song":[
-				{"id":"s3","title":"Protection","artist":"Massive Attack","album":"Protection","albumId":"al2","duration":468}]}}}`)
+			_, _ = io.WriteString(w, `{"subsonic-response":{"status":"ok","album":{"id":"al2","artistId":"art-port","song":[
+				{"id":"s3","title":"Glory Box","artist":"Portishead","album":"Dummy","albumId":"al2","duration":300}]}}}`)
 		default:
 			_, _ = io.WriteString(w, `{"subsonic-response":{"status":"failed","error":{"code":70,"message":"not found"}}}`)
 		}
+	})
+	// Recommendation endpoints used by getSongsForYou.
+	mux.HandleFunc("/rest/getTopSongs.view", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Query().Get("artist") {
+		case "Massive Attack":
+			_, _ = io.WriteString(w, `{"subsonic-response":{"status":"ok","topSongs":{"song":[
+				{"id":"ma1","title":"Angel","artist":"Massive Attack","album":"Mezzanine","albumId":"al1","duration":379},
+				{"id":"ma2","title":"Risingson","artist":"Massive Attack","album":"Mezzanine","albumId":"al1","duration":298}]}}}`)
+		case "Portishead":
+			_, _ = io.WriteString(w, `{"subsonic-response":{"status":"ok","topSongs":{"song":[
+				{"id":"po1","title":"Roads","artist":"Portishead","album":"Dummy","albumId":"al2","duration":300}]}}}`)
+		case "Tricky":
+			_, _ = io.WriteString(w, `{"subsonic-response":{"status":"ok","topSongs":{"song":[
+				{"id":"tr1","title":"Hell Is Round the Corner","artist":"Tricky","album":"Maxinquaye","albumId":"alX","duration":340}]}}}`)
+		default:
+			_, _ = io.WriteString(w, `{"subsonic-response":{"status":"ok","topSongs":{"song":[]}}}`)
+		}
+	})
+	mux.HandleFunc("/rest/getArtistInfo2.view", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Query().Get("id") == "art-ma" {
+			_, _ = io.WriteString(w, `{"subsonic-response":{"status":"ok","artistInfo2":{"similarArtist":[{"id":"art-tricky","name":"Tricky"}]}}}`)
+			return
+		}
+		_, _ = io.WriteString(w, `{"subsonic-response":{"status":"ok","artistInfo2":{"similarArtist":[]}}}`)
+	})
+	mux.HandleFunc("/rest/getRandomSongs.view", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"subsonic-response":{"status":"ok","randomSongs":{"song":[
+			{"id":"rnd1","title":"Random One","artist":"Someone","album":"X","albumId":"alR","duration":200},
+			{"id":"rnd2","title":"Random Two","artist":"Another","album":"Y","albumId":"alS","duration":210}]}}}`)
+	})
+	mux.HandleFunc("/rest/getStarred2.view", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"subsonic-response":{"status":"ok","starred2":{"song":[
+			{"id":"fav1","title":"Loved Song","artist":"Fave","album":"F","albumId":"alF","duration":180}]}}}`)
 	})
 	// ping for forward-and-validate auth: bad token => failed status (200).
 	mux.HandleFunc("/rest/ping.view", func(w http.ResponseWriter, r *http.Request) {
