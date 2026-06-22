@@ -53,6 +53,7 @@ app → proxy
         ├─ /rest/scrobble[.view]          → tee: record play, forward unchanged
         ├─ /rest/getRecentlyPlayed[.view] → served from the play store (auth via upstream ping)
         ├─ /rest/getOnRepeat[.view]       → most-replayed songs (song-level On Repeat, from the play store)
+        ├─ /rest/getSongsForYou[.view]    → personalized daily mix (rotation + similar-artist discovery), from play history
         ├─ /rest/getArtistSongs[.view]    → whole-discography fan-out done server-side (1 client round-trip)
         └─ everything else                → streaming reverse proxy → Navidrome
 ```

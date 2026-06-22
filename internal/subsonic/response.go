@@ -39,6 +39,9 @@ type Child struct {
 	// PlayCount is a non-standard extension carrying the play count for
 	// aggregate responses (e.g. getOnRepeat).
 	PlayCount int `xml:"playCount,attr,omitempty" json:"playCount,omitempty"`
+	// Reason is a non-standard extension explaining why a song was recommended
+	// (e.g. getSongsForYou: "Because you play AGA").
+	Reason string `xml:"reason,attr,omitempty" json:"reason,omitempty"`
 }
 
 // RecentlyPlayed is the container for the getRecentlyPlayed response.
@@ -54,6 +57,11 @@ type ArtistSongs struct {
 
 // OnRepeat is the container for the getOnRepeat response (most-replayed songs).
 type OnRepeat struct {
+	Song []Child `xml:"song" json:"song,omitempty"`
+}
+
+// SongsForYou is the container for the getSongsForYou response (a personalized mix).
+type SongsForYou struct {
 	Song []Child `xml:"song" json:"song,omitempty"`
 }
 
@@ -73,6 +81,7 @@ type body struct {
 	RecentlyPlayed *RecentlyPlayed `xml:"recentlyPlayed,omitempty" json:"recentlyPlayed,omitempty"`
 	ArtistSongs    *ArtistSongs    `xml:"artistSongs,omitempty" json:"artistSongs,omitempty"`
 	OnRepeat       *OnRepeat       `xml:"onRepeat,omitempty" json:"onRepeat,omitempty"`
+	SongsForYou    *SongsForYou    `xml:"songsForYou,omitempty" json:"songsForYou,omitempty"`
 }
 
 type xmlEnvelope struct {
@@ -98,6 +107,11 @@ func WriteArtistSongs(w http.ResponseWriter, q url.Values, songs []Child) {
 // WriteOnRepeat writes a successful getOnRepeat response.
 func WriteOnRepeat(w http.ResponseWriter, q url.Values, songs []Child) {
 	write(w, q, body{OnRepeat: &OnRepeat{Song: songs}})
+}
+
+// WriteSongsForYou writes a successful getSongsForYou response.
+func WriteSongsForYou(w http.ResponseWriter, q url.Values, songs []Child) {
+	write(w, q, body{SongsForYou: &SongsForYou{Song: songs}})
 }
 
 // WriteError writes a Subsonic error response. Note: Subsonic conveys errors in

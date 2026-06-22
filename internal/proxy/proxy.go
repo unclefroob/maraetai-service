@@ -82,6 +82,11 @@ func New(upstream *url.URL, st *store.Store, log *slog.Logger) http.Handler {
 		mux.Handle("/rest/getOnRepeat", onRepeat)
 		mux.Handle("/rest/getOnRepeat.view", onRepeat)
 
+		// Personalized "Songs for you" mix, built from play history.
+		songsForYou := newSongsForYouHandler(st, auth.NewValidator(upstream), navidrome.New(upstream), log)
+		mux.Handle("/rest/getSongsForYou", songsForYou)
+		mux.Handle("/rest/getSongsForYou.view", songsForYou)
+
 		// M4: JSON stats API + the embedded SPA that consumes it (and the
 		// recents endpoint above). The SPA lives at /app/ so it never shadows
 		// the Subsonic surface forwarded to Navidrome.
