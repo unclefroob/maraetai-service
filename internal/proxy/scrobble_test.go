@@ -35,6 +35,15 @@ func fakeNavidrome(t *testing.T, scrobbleHits *int32) *httptest.Server {
 	}
 	mux.HandleFunc("/rest/scrobble", scrobble)
 	mux.HandleFunc("/rest/scrobble.view", scrobble)
+	// ping for forward-and-validate auth: bad token => failed status (200).
+	mux.HandleFunc("/rest/ping.view", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Query().Get("t") == "bad" {
+			_, _ = io.WriteString(w, `{"subsonic-response":{"status":"failed","error":{"code":40,"message":"Wrong username or password"}}}`)
+			return
+		}
+		_, _ = io.WriteString(w, `{"subsonic-response":{"status":"ok"}}`)
+	})
 	return httptest.NewServer(mux)
 }
 

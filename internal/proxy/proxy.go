@@ -12,6 +12,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 
+	"github.com/unclefroob/maraetai-service/internal/auth"
 	"github.com/unclefroob/maraetai-service/internal/navidrome"
 	"github.com/unclefroob/maraetai-service/internal/store"
 )
@@ -60,10 +61,17 @@ func New(upstream *url.URL, st *store.Store, log *slog.Logger) http.Handler {
 		}
 		mux.Handle("/rest/scrobble", tee)
 		mux.Handle("/rest/scrobble.view", tee)
-	}
 
-	// --- future seams (M2+) ---
-	// mux.Handle("/rest/getRecentlyPlayed.view", recents(store)) // proxy-served
+		// M2: serve per-song de-duplicated recent plays from the store. Auth is
+		// validated against upstream (forward-and-validate); no local user table.
+		recents := &recentsHandler{
+			store: st,
+			auth:  auth.NewValidator(upstream),
+			log:   log,
+		}
+		mux.Handle("/rest/getRecentlyPlayed", recents)
+		mux.Handle("/rest/getRecentlyPlayed.view", recents)
+	}
 
 	// Catch-all: forward everything else to Navidrome untouched.
 	mux.Handle("/", rp)
