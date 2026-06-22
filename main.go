@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -19,6 +20,13 @@ import (
 )
 
 func main() {
+	// `maraetai-service healthcheck` probes the local /healthz and exits 0/1.
+	// Used by the container HEALTHCHECK — the distroless image has no shell or
+	// curl, so the binary checks itself.
+	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
+		os.Exit(runHealthcheck())
+	}
+
 	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
 	cfg, err := config.Load()
@@ -62,4 +70,27 @@ func main() {
 		log.Error("shutdown", "err", err)
 		os.Exit(1)
 	}
+}
+
+// runHealthcheck GETs /healthz on the configured listen port and returns a
+// process exit code (0 healthy, 1 not).
+func runHealthcheck() int {
+	addr := os.Getenv("LISTEN_ADDR")
+	if addr == "" {
+		addr = ":8080"
+	}
+	_, port, err := net.SplitHostPort(addr)
+	if err != nil || port == "" {
+		port = "8080"
+	}
+	client := &http.Client{Timeout: 3 * time.Second}
+	resp, err := client.Get("http://127.0.0.1:" + port + "/healthz")
+	if err != nil {
+		return 1
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return 1
+	}
+	return 0
 }

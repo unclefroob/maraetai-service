@@ -80,7 +80,51 @@ NAVIDROME_URL=http://localhost:4533 go run .
 The SPA is plain ES modules + CSS embedded via `go:embed` (no build step / no
 node toolchain) and lives in `internal/web/static`.
 
-## Run with Docker Compose (proxy + Navidrome sidecar)
+## Docker
+
+The service ships as a single static image (`gcr.io/distroless/static`), published
+to GHCR on every push to `main`:
+
+```
+ghcr.io/unclefroob/maraetai-service:latest
+```
+
+It needs nothing but a reachable Navidrome — set `NAVIDROME_URL` and run it. There
+is no database to provision (SQLite file in a mounted volume) and no Navidrome
+config to touch; standard Subsonic traffic is forwarded untouched, so a plain
+Navidrome client keeps working through it too.
+
+### In front of a Navidrome you already run
+
+`docker-compose.existing.yml` joins your existing Navidrome's Docker network and
+reaches it by container name — nothing about your Navidrome setup changes:
+
+```sh
+# tell it how to reach your Navidrome (by container/service name, not localhost)
+# and which Docker network that container is on:
+export NAVIDROME_URL=http://navidrome:4533
+export NAVIDROME_NETWORK=navidrome_default     # see the file's header to find yours
+docker compose -f docker-compose.existing.yml up -d
+# point the Maraetai apps at http://<host>:8080
+```
+
+Or without compose:
+
+```sh
+docker run -d --name maraetai-service \
+  --network <your-navidrome-network> \
+  -e NAVIDROME_URL=http://<navidrome-container>:4533 \
+  -p 8080:8080 -v maraetai-data:/data \
+  ghcr.io/unclefroob/maraetai-service:latest
+```
+
+The proxy doesn't probe Navidrome at startup (it forwards lazily, per request),
+so start order doesn't matter — bring it up before or after Navidrome and it
+works once Navidrome is reachable. The image's `HEALTHCHECK` reports readiness.
+
+### All-in-one (proxy + a fresh Navidrome)
+
+For a new setup, `docker-compose.yml` runs both:
 
 ```sh
 cp .env.example .env   # set MUSIC_DIR to your library
