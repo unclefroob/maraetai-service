@@ -1,0 +1,25 @@
+# Runs the proxy as a sidecar in front of Navidrome.
+# Point your Maraetai apps at http://<host>:8080 instead of the Navidrome port.
+services:
+  navidrome:
+    image: deluan/navidrome:latest
+    restart: unless-stopped
+    environment:
+      ND_LOGLEVEL: info
+    volumes:
+      - ./data/navidrome:/data
+      - ${MUSIC_DIR:-./music}:/music:ro
+    # No published port: only the proxy needs to reach Navidrome.
+    expose:
+      - "4533"
+
+  proxy:
+    build: .
+    restart: unless-stopped
+    environment:
+      NAVIDROME_URL: http://navidrome:4533
+      LISTEN_ADDR: ":8080"
+    ports:
+      - "8080:8080"
+    depends_on:
+      - navidrome

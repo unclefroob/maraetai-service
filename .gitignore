@@ -1,0 +1,8 @@
+/maraetai-service
+/out/
+/data/
+/music/
+*.db
+*.db-shm
+*.db-wal
+.env
