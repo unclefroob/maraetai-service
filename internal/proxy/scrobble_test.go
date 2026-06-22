@@ -27,7 +27,8 @@ func fakeNavidrome(t *testing.T, scrobbleHits *int32) *httptest.Server {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{"subsonic-response":{"status":"ok","song":{
 			"id":"song123","title":"Teardrop","artist":"Massive Attack",
-			"album":"Mezzanine","albumId":"alb9","coverArt":"art9","duration":331}}}`)
+			"album":"Mezzanine","albumId":"alb9","coverArt":"art9","duration":331,
+			"suffix":"flac","contentType":"audio/flac","bitRate":1024}}}`)
 	})
 	scrobble := func(w http.ResponseWriter, _ *http.Request) {
 		atomic.AddInt32(scrobbleHits, 1)

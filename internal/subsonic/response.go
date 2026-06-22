@@ -34,8 +34,12 @@ type Child struct {
 	AlbumID  string `xml:"albumId,attr,omitempty" json:"albumId,omitempty"`
 	CoverArt string `xml:"coverArt,attr,omitempty" json:"coverArt,omitempty"`
 	Duration int    `xml:"duration,attr,omitempty" json:"duration,omitempty"`
+	Suffix   string `xml:"suffix,attr,omitempty" json:"suffix,omitempty"`
+	BitRate  int    `xml:"bitRate,attr,omitempty" json:"bitRate,omitempty"`
 	Type     string `xml:"type,attr,omitempty" json:"type,omitempty"`
-	PlayedAt int64  `xml:"playedAt,attr,omitempty" json:"playedAt,omitempty"`
+	// ContentType carries the MIME type so clients can classify lossless vs lossy.
+	ContentType string `xml:"contentType,attr,omitempty" json:"contentType,omitempty"`
+	PlayedAt    int64  `xml:"playedAt,attr,omitempty" json:"playedAt,omitempty"`
 	// PlayCount is a non-standard extension carrying the play count for
 	// aggregate responses (e.g. getOnRepeat).
 	PlayCount int `xml:"playCount,attr,omitempty" json:"playCount,omitempty"`

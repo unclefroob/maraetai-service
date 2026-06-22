@@ -119,6 +119,9 @@ func (t *scrobbleTee) record(user, client string, auth url.Values, recs []pendin
 			p.AlbumID = song.AlbumID
 			p.CoverArt = song.CoverArt
 			p.Duration = song.Duration
+			p.Suffix = song.Suffix
+			p.ContentType = song.ContentType
+			p.BitRate = song.BitRate
 		} else {
 			t.log.Warn("scrobble: metadata lookup failed", "song_id", pp.songID)
 		}

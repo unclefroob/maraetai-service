@@ -17,6 +17,26 @@ func newStore(t *testing.T) *Store {
 	return st
 }
 
+func TestInsertPlayRoundTripsFormat(t *testing.T) {
+	st := newStore(t)
+	ctx := context.Background()
+	if err := st.InsertPlay(ctx, Play{
+		User: "alice", SongID: "flacsong", PlayedAt: time.Unix(1700000000, 0).UTC(),
+		Title: "Lossless", Artist: "A", Duration: 200,
+		Suffix: "flac", ContentType: "audio/flac", BitRate: 1024,
+	}); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	got, err := st.RecentlyPlayed(ctx, "alice", 10, 0)
+	if err != nil || len(got) != 1 {
+		t.Fatalf("recent: %v len=%d", err, len(got))
+	}
+	if got[0].Suffix != "flac" || got[0].ContentType != "audio/flac" || got[0].BitRate != 1024 {
+		t.Errorf("format not round-tripped: suffix=%q contentType=%q bitRate=%d",
+			got[0].Suffix, got[0].ContentType, got[0].BitRate)
+	}
+}
+
 func TestRecentlyPlayedDistinctDedupsAndOrders(t *testing.T) {
 	st := newStore(t)
 	ctx := context.Background()

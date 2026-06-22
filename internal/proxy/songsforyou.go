@@ -299,16 +299,19 @@ func toChildren(songs []navidrome.Song, reason string) []subsonic.Child {
 	out := make([]subsonic.Child, 0, len(songs))
 	for _, s := range songs {
 		out = append(out, subsonic.Child{
-			ID:       s.ID,
-			IsDir:    false,
-			Title:    s.Title,
-			Album:    s.Album,
-			Artist:   s.Artist,
-			AlbumID:  s.AlbumID,
-			CoverArt: s.CoverArt,
-			Duration: s.Duration,
-			Type:     "music",
-			Reason:   reason,
+			ID:          s.ID,
+			IsDir:       false,
+			Title:       s.Title,
+			Album:       s.Album,
+			Artist:      s.Artist,
+			AlbumID:     s.AlbumID,
+			CoverArt:    s.CoverArt,
+			Duration:    s.Duration,
+			Suffix:      s.Suffix,
+			ContentType: s.ContentType,
+			BitRate:     s.BitRate,
+			Type:        "music",
+			Reason:      reason,
 		})
 	}
 	return out
