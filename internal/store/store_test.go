@@ -56,6 +56,61 @@ func TestRecentlyPlayedDistinctDedupsAndOrders(t *testing.T) {
 	}
 }
 
+func TestStatsAggregates(t *testing.T) {
+	st := newStore(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	play := func(song, title, artist string, dur int, at time.Time) {
+		if err := st.InsertPlay(ctx, Play{
+			User: "alice", SongID: song, PlayedAt: at, Client: "ios",
+			Title: title, Artist: artist, Album: "Alb", Duration: dur,
+		}); err != nil {
+			t.Fatalf("insert: %v", err)
+		}
+	}
+
+	// alice: song1 x3 (Massive Attack), song2 x1 (Portishead), song3 x2 (Massive Attack)
+	for i := 0; i < 3; i++ {
+		play("song1", "Angel", "Massive Attack", 379, now.Add(-time.Duration(i)*time.Hour))
+	}
+	play("song2", "Roads", "Portishead", 300, now.Add(-2*time.Hour))
+	for i := 0; i < 2; i++ {
+		play("song3", "Teardrop", "Massive Attack", 331, now.Add(-time.Duration(i)*time.Minute))
+	}
+	// a different user's plays must not leak in.
+	play2 := Play{User: "bob", SongID: "x", PlayedAt: now, Title: "X", Artist: "Y", Duration: 100}
+	if err := st.InsertPlay(ctx, play2); err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := st.Stats(ctx, "alice", now.Add(-24*time.Hour), 10)
+	if err != nil {
+		t.Fatalf("stats: %v", err)
+	}
+
+	if s.TotalPlays != 6 {
+		t.Errorf("totalPlays = %d, want 6", s.TotalPlays)
+	}
+	if s.DistinctSongs != 3 {
+		t.Errorf("distinctSongs = %d, want 3", s.DistinctSongs)
+	}
+	if want := 3*379 + 300 + 2*331; s.TotalDurationS != want {
+		t.Errorf("totalDuration = %d, want %d", s.TotalDurationS, want)
+	}
+	// Massive Attack (5 plays) ahead of Portishead (1).
+	if len(s.TopArtists) != 2 || s.TopArtists[0].Artist != "Massive Attack" || s.TopArtists[0].Plays != 5 {
+		t.Errorf("topArtists = %+v", s.TopArtists)
+	}
+	// song1 (3 plays) is the top song.
+	if len(s.TopSongs) == 0 || s.TopSongs[0].SongID != "song1" || s.TopSongs[0].Plays != 3 {
+		t.Errorf("topSongs = %+v", s.TopSongs)
+	}
+	if len(s.PlaysByDay) == 0 {
+		t.Errorf("playsByDay empty")
+	}
+}
+
 func TestRecentlyPlayedDistinctScopedByUser(t *testing.T) {
 	st := newStore(t)
 	ctx := context.Background()

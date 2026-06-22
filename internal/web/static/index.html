@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark" />
+  <title>Maraetai</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Login -->
+  <main id="login" class="login hidden">
+    <form id="login-form" class="card">
+      <h1>Maraetai</h1>
+      <p class="muted">Sign in with your Navidrome credentials.</p>
+      <label>Username<input id="username" autocomplete="username" required /></label>
+      <label>Password<input id="password" type="password" autocomplete="current-password" required /></label>
+      <button type="submit">Sign in</button>
+      <p id="login-error" class="error hidden"></p>
+    </form>
+  </main>
+
+  <!-- App -->
+  <div id="app" class="hidden">
+    <header class="topbar">
+      <span class="brand">Maraetai</span>
+      <nav class="tabs">
+        <button data-tab="history" class="active">History</button>
+        <button data-tab="stats">Stats</button>
+      </nav>
+      <span class="spacer"></span>
+      <span id="who" class="muted"></span>
+      <button id="logout" class="ghost">Log out</button>
+    </header>
+
+    <section id="tab-history" class="tab">
+      <h2>Recently played</h2>
+      <div id="history-list" class="list"></div>
+      <p id="history-empty" class="muted hidden">No plays recorded yet.</p>
+    </section>
+
+    <section id="tab-stats" class="tab hidden">
+      <div class="range">
+        <label>Window
+          <select id="stats-days">
+            <option value="7">7 days</option>
+            <option value="30">30 days</option>
+            <option value="365" selected>1 year</option>
+            <option value="3650">All time</option>
+          </select>
+        </label>
+      </div>
+      <div class="totals" id="stats-totals"></div>
+      <div class="cols">
+        <div><h3>Top artists</h3><ol id="top-artists" class="rank"></ol></div>
+        <div><h3>Top songs</h3><ol id="top-songs" class="rank"></ol></div>
+      </div>
+      <h3>Plays by day</h3>
+      <div id="by-day" class="bars"></div>
+    </section>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

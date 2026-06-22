@@ -15,6 +15,7 @@ import (
 	"github.com/unclefroob/maraetai-service/internal/auth"
 	"github.com/unclefroob/maraetai-service/internal/navidrome"
 	"github.com/unclefroob/maraetai-service/internal/store"
+	"github.com/unclefroob/maraetai-service/internal/web"
 )
 
 // New builds the top-level handler: a router whose catch-all is a streaming
@@ -71,6 +72,19 @@ func New(upstream *url.URL, st *store.Store, log *slog.Logger) http.Handler {
 		}
 		mux.Handle("/rest/getRecentlyPlayed", recents)
 		mux.Handle("/rest/getRecentlyPlayed.view", recents)
+
+		// M4: JSON stats API + the embedded SPA that consumes it (and the
+		// recents endpoint above). The SPA lives at /app/ so it never shadows
+		// the Subsonic surface forwarded to Navidrome.
+		mux.Handle("/api/stats", &statsHandler{
+			store: st,
+			auth:  auth.NewValidator(upstream),
+			log:   log,
+		})
+		mux.Handle("/app/", http.StripPrefix("/app/", web.Handler()))
+		mux.HandleFunc("/app", func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "/app/", http.StatusMovedPermanently)
+		})
 	}
 
 	// Catch-all: forward everything else to Navidrome untouched.

@@ -32,16 +32,24 @@ features. A single binary also serves an embedded SPA (history + stats).
   credentials or user table live here. Errors use Subsonic codes (40 wrong
   creds, 10 missing param) with HTTP 200, as Subsonic clients expect.
 
+- **M4 — Embedded SPA + stats API (current):** a single-page web app served from
+  the binary at `/app/` (history timeline + Wrapped-style stats), backed by a new
+  `GET /api/stats` JSON endpoint that aggregates the play store (totals, top
+  artists, top songs, plays-by-day). The SPA authenticates with Navidrome
+  credentials using salt+token (the password never goes on the wire), the same
+  way the native apps do.
+
 Planned:
 
 - **M3** — wire the recents call into the Maraetai apps.
-- **M4** — embedded SPA: history timeline + Wrapped-style stats.
 
 ## How it works
 
 ```
 app → proxy
         ├─ /healthz                       → served locally (no upstream hit)
+        ├─ /app/                          → embedded single-page web app
+        ├─ /api/stats                     → JSON listening stats (auth via upstream ping)
         ├─ /rest/scrobble[.view]          → tee: record play, forward unchanged
         ├─ /rest/getRecentlyPlayed[.view] → served from the play store (auth via upstream ping)
         └─ everything else                → streaming reverse proxy → Navidrome
@@ -65,7 +73,11 @@ endpoint we don't explicitly handle are never on a special code path.
 ```sh
 NAVIDROME_URL=http://localhost:4533 go run .
 # proxy now on http://localhost:8080 — point a Maraetai app there
+# web app at http://localhost:8080/app/ (sign in with Navidrome credentials)
 ```
+
+The SPA is plain ES modules + CSS embedded via `go:embed` (no build step / no
+node toolchain) and lives in `internal/web/static`.
 
 ## Run with Docker Compose (proxy + Navidrome sidecar)
 
