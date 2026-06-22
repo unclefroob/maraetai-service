@@ -23,9 +23,17 @@ features. A single binary also serves an embedded SPA (history + stats).
   edits/deletes. `submission=false` now-playing pings are forwarded but not
   recorded. Recording is asynchronous and never blocks the playback path.
 
+- **M2 — Recently-played read API (current):** `GET /rest/getRecentlyPlayed[.view]`
+  serves the play store as a Subsonic-shaped response (XML default, JSON, JSONP),
+  de-duplicated to one entry per song (most recent play), most-recent-first, with
+  `count`/`offset` paging and a non-standard `playedAt` attribute. Auth is
+  **forward-and-validate**: the request's own `u`/`t`/`s` are checked against
+  upstream `ping`, so results are scoped to the requesting user and no
+  credentials or user table live here. Errors use Subsonic codes (40 wrong
+  creds, 10 missing param) with HTTP 200, as Subsonic clients expect.
+
 Planned:
 
-- **M2** — `getRecentlyPlayed` endpoint (XML + JSON) + forward-and-validate auth.
 - **M3** — wire the recents call into the Maraetai apps.
 - **M4** — embedded SPA: history timeline + Wrapped-style stats.
 
@@ -35,7 +43,7 @@ Planned:
 app → proxy
         ├─ /healthz                       → served locally (no upstream hit)
         ├─ /rest/scrobble[.view]          → tee: record play, forward unchanged
-        ├─ (M2) /rest/getRecentlyPlayed   → served from the play store
+        ├─ /rest/getRecentlyPlayed[.view] → served from the play store (auth via upstream ping)
         └─ everything else                → streaming reverse proxy → Navidrome
 ```
 

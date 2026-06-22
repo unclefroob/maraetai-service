@@ -132,6 +132,43 @@ func (s *Store) RecentlyPlayed(ctx context.Context, user string, limit, offset i
 	return out, rows.Err()
 }
 
+// RecentlyPlayedDistinct returns a user's listens collapsed to one row per
+// song (the most recent play of each), most-recent-first. This is what the
+// "recently played songs" view wants — no repeats when a track is looped.
+//
+// It relies on a documented SQLite feature: when a query uses MAX()/MIN() with
+// bare (non-aggregated, non-grouped) columns, those columns take their values
+// from the row that supplied the max/min. So MAX(played_at) per song_id yields
+// the metadata snapshot from that song's most recent play.
+func (s *Store) RecentlyPlayedDistinct(ctx context.Context, user string, limit, offset int) ([]Play, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	const q = `SELECT song_id, MAX(played_at) AS pa, client, title, artist, album, album_id, cover_art, duration
+        FROM plays WHERE user = ?
+        GROUP BY song_id
+        ORDER BY pa DESC LIMIT ? OFFSET ?`
+	rows, err := s.db.QueryContext(ctx, q, user, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("query recent distinct: %w", err)
+	}
+	defer rows.Close()
+
+	var out []Play
+	for rows.Next() {
+		var p Play
+		var ts int64
+		if err := rows.Scan(&p.SongID, &ts, &p.Client, &p.Title, &p.Artist,
+			&p.Album, &p.AlbumID, &p.CoverArt, &p.Duration); err != nil {
+			return nil, fmt.Errorf("scan recent distinct: %w", err)
+		}
+		p.User = user
+		p.PlayedAt = time.Unix(ts, 0).UTC()
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
 // Close closes the underlying database.
 func (s *Store) Close() error {
 	return s.db.Close()
