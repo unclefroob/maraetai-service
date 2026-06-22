@@ -84,14 +84,17 @@ func (h *artistSongsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func songToChild(s navidrome.Song) subsonic.Child {
 	return subsonic.Child{
-		ID:       s.ID,
-		IsDir:    false,
-		Title:    s.Title,
-		Album:    s.Album,
-		Artist:   s.Artist,
-		AlbumID:  s.AlbumID,
-		CoverArt: s.CoverArt,
-		Duration: s.Duration,
-		Type:     "music",
+		ID:          s.ID,
+		IsDir:       false,
+		Title:       s.Title,
+		Album:       s.Album,
+		Artist:      s.Artist,
+		AlbumID:     s.AlbumID,
+		CoverArt:    s.CoverArt,
+		Duration:    s.Duration,
+		Suffix:      s.Suffix,
+		ContentType: s.ContentType,
+		BitRate:     s.BitRate,
+		Type:        "music",
 	}
 }

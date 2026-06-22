@@ -29,13 +29,16 @@ func New(base *url.URL) *Client {
 
 // Song is the subset of Subsonic song metadata we use.
 type Song struct {
-	ID       string `json:"id"`
-	Title    string `json:"title"`
-	Artist   string `json:"artist"`
-	Album    string `json:"album"`
-	AlbumID  string `json:"albumId"`
-	CoverArt string `json:"coverArt"`
-	Duration int    `json:"duration"`
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	Artist      string `json:"artist"`
+	Album       string `json:"album"`
+	AlbumID     string `json:"albumId"`
+	CoverArt    string `json:"coverArt"`
+	Duration    int    `json:"duration"`
+	Suffix      string `json:"suffix"`
+	ContentType string `json:"contentType"`
+	BitRate     int    `json:"bitRate"`
 }
 
 // Album is an album stub. Year lets the caller order a discography.

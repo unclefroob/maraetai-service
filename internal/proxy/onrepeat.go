@@ -60,17 +60,20 @@ func (h *onRepeatHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	songs := make([]subsonic.Child, 0, len(plays))
 	for _, p := range plays {
 		songs = append(songs, subsonic.Child{
-			ID:        p.SongID,
-			IsDir:     false,
-			Title:     p.Title,
-			Album:     p.Album,
-			Artist:    p.Artist,
-			AlbumID:   p.AlbumID,
-			CoverArt:  p.CoverArt,
-			Duration:  p.Duration,
-			Type:      "music",
-			PlayedAt:  p.PlayedAt.Unix(),
-			PlayCount: p.Plays,
+			ID:          p.SongID,
+			IsDir:       false,
+			Title:       p.Title,
+			Album:       p.Album,
+			Artist:      p.Artist,
+			AlbumID:     p.AlbumID,
+			CoverArt:    p.CoverArt,
+			Duration:    p.Duration,
+			Suffix:      p.Suffix,
+			ContentType: p.ContentType,
+			BitRate:     p.BitRate,
+			Type:        "music",
+			PlayedAt:    p.PlayedAt.Unix(),
+			PlayCount:   p.Plays,
 		})
 	}
 	subsonic.WriteOnRepeat(w, q, songs)
