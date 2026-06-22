@@ -126,3 +126,44 @@ func TestRecentlyPlayedDistinctScopedByUser(t *testing.T) {
 		t.Errorf("user scoping leaked: %+v", got)
 	}
 }
+
+func TestOnRepeat(t *testing.T) {
+	st := newStore(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	play := func(song string, at time.Time) {
+		if err := st.InsertPlay(ctx, Play{User: "alice", SongID: song, PlayedAt: at, Title: song}); err != nil {
+			t.Fatalf("insert: %v", err)
+		}
+	}
+	// A: 4 recent plays (on repeat); C: 3 recent (on repeat); B: 2 recent (below
+	// threshold); D: 5 plays but all >30 days ago (outside window).
+	for i := 0; i < 4; i++ {
+		play("A", now.Add(-time.Duration(i)*time.Hour))
+	}
+	for i := 0; i < 3; i++ {
+		play("C", now.Add(-time.Duration(i)*time.Hour))
+	}
+	for i := 0; i < 2; i++ {
+		play("B", now.Add(-time.Duration(i)*time.Hour))
+	}
+	for i := 0; i < 5; i++ {
+		play("D", now.AddDate(0, 0, -40).Add(-time.Duration(i)*time.Hour))
+	}
+
+	got, err := st.OnRepeat(ctx, "alice", now.AddDate(0, 0, -30), 3, 50)
+	if err != nil {
+		t.Fatalf("onRepeat: %v", err)
+	}
+	// Only A and C qualify; A (4 plays) before C (3 plays).
+	if len(got) != 2 {
+		t.Fatalf("want 2 on-repeat songs, got %d: %+v", len(got), got)
+	}
+	if got[0].SongID != "A" || got[0].Plays != 4 {
+		t.Errorf("first = %s (%d plays), want A (4)", got[0].SongID, got[0].Plays)
+	}
+	if got[1].SongID != "C" || got[1].Plays != 3 {
+		t.Errorf("second = %s (%d plays), want C (3)", got[1].SongID, got[1].Plays)
+	}
+}
