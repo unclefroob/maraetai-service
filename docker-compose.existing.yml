@@ -1,0 +1,33 @@
+# Drop maraetai-service in front of a Navidrome you ALREADY run in Docker.
+#
+# 1. Find the Docker network your Navidrome container is on:
+#       docker inspect -f '{{json .NetworkSettings.Networks}}' <navidrome-container>
+#    (for a compose-managed Navidrome it's usually "<project>_default", e.g. navidrome_default)
+# 2. Set the two values below (env or a .env file next to this file), then:
+#       docker compose -f docker-compose.existing.yml up -d
+# 3. Point the Maraetai apps at http://<host>:8080
+#
+#   NAVIDROME_URL     – how to reach Navidrome from inside Docker, by container/
+#                       service name (NOT localhost): e.g. http://navidrome:4533
+#   NAVIDROME_NETWORK – the existing Docker network that container is attached to
+services:
+  maraetai-service:
+    image: ghcr.io/unclefroob/maraetai-service:latest
+    restart: unless-stopped
+    environment:
+      NAVIDROME_URL: ${NAVIDROME_URL:-http://navidrome:4533}
+      DB_PATH: /data/maraetai.db
+    volumes:
+      - maraetai-data:/data
+    ports:
+      - "8080:8080"
+    networks:
+      - navidrome
+
+networks:
+  navidrome:
+    external: true
+    name: ${NAVIDROME_NETWORK:-navidrome_default}
+
+volumes:
+  maraetai-data:

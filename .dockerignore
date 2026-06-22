@@ -1,0 +1,11 @@
+.git
+.github
+data/
+music/
+*.db
+*.db-shm
+*.db-wal
+.env
+README.md
+/maraetai-service
+/out/
