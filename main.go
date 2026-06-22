@@ -15,6 +15,7 @@ import (
 
 	"github.com/unclefroob/maraetai-service/internal/config"
 	"github.com/unclefroob/maraetai-service/internal/proxy"
+	"github.com/unclefroob/maraetai-service/internal/store"
 )
 
 func main() {
@@ -26,9 +27,16 @@ func main() {
 		os.Exit(1)
 	}
 
+	st, err := store.Open(cfg.DBPath)
+	if err != nil {
+		log.Error("store", "err", err)
+		os.Exit(1)
+	}
+	defer func() { _ = st.Close() }()
+
 	srv := &http.Server{
 		Addr:              cfg.ListenAddr,
-		Handler:           proxy.New(cfg.NavidromeURL, log),
+		Handler:           proxy.New(cfg.NavidromeURL, st, log),
 		ReadHeaderTimeout: 10 * time.Second,
 		// No write timeout: audio streams are long-lived.
 	}
@@ -38,7 +46,7 @@ func main() {
 	defer stop()
 
 	go func() {
-		log.Info("listening", "addr", cfg.ListenAddr, "upstream", cfg.NavidromeURL.String())
+		log.Info("listening", "addr", cfg.ListenAddr, "upstream", cfg.NavidromeURL.String(), "db", cfg.DBPath)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Error("server", "err", err)
 			os.Exit(1)

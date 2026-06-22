@@ -11,11 +11,17 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+
+	"github.com/unclefroob/maraetai-service/internal/navidrome"
+	"github.com/unclefroob/maraetai-service/internal/store"
 )
 
 // New builds the top-level handler: a router whose catch-all is a streaming
 // reverse proxy to the given Navidrome upstream.
-func New(upstream *url.URL, log *slog.Logger) http.Handler {
+//
+// If st is non-nil, scrobble requests are tee'd into the play store before
+// being forwarded. A nil store yields a pure passthrough proxy.
+func New(upstream *url.URL, st *store.Store, log *slog.Logger) http.Handler {
 	rp := httputil.NewSingleHostReverseProxy(upstream)
 
 	// FlushInterval -1 flushes writes to the client immediately, so audio
@@ -43,8 +49,20 @@ func New(upstream *url.URL, log *slog.Logger) http.Handler {
 		_, _ = w.Write([]byte("ok"))
 	})
 
-	// --- future seams (M1+) ---
-	// mux.Handle("/rest/scrobble.view", tee(rp, store))          // log then forward
+	// M1: tee scrobbles into the play store, then forward unchanged. Subsonic
+	// clients may call the endpoint with or without the ".view" suffix.
+	if st != nil {
+		tee := &scrobbleTee{
+			next:  rp,
+			store: st,
+			meta:  newMetaResolver(navidrome.New(upstream)),
+			log:   log,
+		}
+		mux.Handle("/rest/scrobble", tee)
+		mux.Handle("/rest/scrobble.view", tee)
+	}
+
+	// --- future seams (M2+) ---
 	// mux.Handle("/rest/getRecentlyPlayed.view", recents(store)) // proxy-served
 
 	// Catch-all: forward everything else to Navidrome untouched.
