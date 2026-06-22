@@ -169,6 +169,122 @@ func (s *Store) RecentlyPlayedDistinct(ctx context.Context, user string, limit, 
 	return out, rows.Err()
 }
 
+// ArtistCount is a play tally for one artist.
+type ArtistCount struct {
+	Artist string `json:"artist"`
+	Plays  int    `json:"plays"`
+}
+
+// SongCount is a play tally for one song.
+type SongCount struct {
+	SongID string `json:"songId"`
+	Title  string `json:"title"`
+	Artist string `json:"artist"`
+	Plays  int    `json:"plays"`
+}
+
+// DayCount is a play tally for one calendar day (UTC, YYYY-MM-DD).
+type DayCount struct {
+	Day   string `json:"day"`
+	Plays int    `json:"plays"`
+}
+
+// Stats is a Wrapped-style summary of a user's listening since a given time.
+type Stats struct {
+	TotalPlays     int           `json:"totalPlays"`
+	DistinctSongs  int           `json:"distinctSongs"`
+	TotalDurationS int           `json:"totalDurationSeconds"`
+	TopArtists     []ArtistCount `json:"topArtists"`
+	TopSongs       []SongCount   `json:"topSongs"`
+	PlaysByDay     []DayCount    `json:"playsByDay"`
+}
+
+// Stats aggregates a user's listening from `since` to now. topN bounds the
+// top-artists and top-songs lists.
+func (s *Store) Stats(ctx context.Context, user string, since time.Time, topN int) (*Stats, error) {
+	if topN <= 0 {
+		topN = 10
+	}
+	from := since.Unix()
+	out := &Stats{
+		TopArtists: []ArtistCount{},
+		TopSongs:   []SongCount{},
+		PlaysByDay: []DayCount{},
+	}
+
+	row := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(*), COUNT(DISTINCT song_id), COALESCE(SUM(duration),0)
+         FROM plays WHERE user = ? AND played_at >= ?`, user, from)
+	if err := row.Scan(&out.TotalPlays, &out.DistinctSongs, &out.TotalDurationS); err != nil {
+		return nil, fmt.Errorf("stats totals: %w", err)
+	}
+
+	if err := s.queryRows(ctx,
+		`SELECT artist, COUNT(*) c FROM plays
+         WHERE user = ? AND played_at >= ? AND artist <> ''
+         GROUP BY artist ORDER BY c DESC, artist LIMIT ?`,
+		[]any{user, from, topN},
+		func(scan func(...any) error) error {
+			var a ArtistCount
+			if err := scan(&a.Artist, &a.Plays); err != nil {
+				return err
+			}
+			out.TopArtists = append(out.TopArtists, a)
+			return nil
+		}); err != nil {
+		return nil, fmt.Errorf("stats artists: %w", err)
+	}
+
+	if err := s.queryRows(ctx,
+		`SELECT song_id, title, artist, COUNT(*) c FROM plays
+         WHERE user = ? AND played_at >= ?
+         GROUP BY song_id ORDER BY c DESC, title LIMIT ?`,
+		[]any{user, from, topN},
+		func(scan func(...any) error) error {
+			var sc SongCount
+			if err := scan(&sc.SongID, &sc.Title, &sc.Artist, &sc.Plays); err != nil {
+				return err
+			}
+			out.TopSongs = append(out.TopSongs, sc)
+			return nil
+		}); err != nil {
+		return nil, fmt.Errorf("stats songs: %w", err)
+	}
+
+	if err := s.queryRows(ctx,
+		`SELECT date(played_at, 'unixepoch') d, COUNT(*) c FROM plays
+         WHERE user = ? AND played_at >= ?
+         GROUP BY d ORDER BY d`,
+		[]any{user, from},
+		func(scan func(...any) error) error {
+			var d DayCount
+			if err := scan(&d.Day, &d.Plays); err != nil {
+				return err
+			}
+			out.PlaysByDay = append(out.PlaysByDay, d)
+			return nil
+		}); err != nil {
+		return nil, fmt.Errorf("stats by-day: %w", err)
+	}
+
+	return out, nil
+}
+
+// queryRows runs a query and invokes fn for each row with its Scan function.
+func (s *Store) queryRows(ctx context.Context, query string, args []any, fn func(scan func(...any) error) error) error {
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		if err := fn(rows.Scan); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
+}
+
 // Close closes the underlying database.
 func (s *Store) Close() error {
 	return s.db.Close()
