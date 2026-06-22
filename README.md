@@ -11,37 +11,39 @@ Most traffic is forwarded untouched; the proxy only intervenes on the handful
 of endpoints it augments, and adds new Subsonic-shaped endpoints for new
 features. A single binary also serves an embedded SPA (history + stats).
 
-## Status
+## What it adds
 
-- **M0 — Skeleton:** transparent reverse proxy. Forwards all traffic to
-  Navidrome unchanged, with streaming-safe pass-through for audio. Point an app
-  at it and everything works exactly as before.
-- **M1 — Play-history capture (current):** `scrobble` requests are tee'd into a
-  SQLite play store before being forwarded untouched. Song metadata (which
-  scrobbles don't carry — only an id + time) is resolved once via upstream
-  `getSong`, cached, and snapshotted on each play so history survives upstream
-  edits/deletes. `submission=false` now-playing pings are forwarded but not
-  recorded. Recording is asynchronous and never blocks the playback path.
+All of these are built from a SQLite **play store**: `scrobble` requests are
+tee'd into it (then forwarded untouched), with song metadata resolved once via
+upstream `getSong`, cached, and snapshotted per play so history survives
+upstream edits/deletes. Recording is async and never blocks playback.
 
-- **M2 — Recently-played read API (current):** `GET /rest/getRecentlyPlayed[.view]`
-  serves the play store as a Subsonic-shaped response (XML default, JSON, JSONP),
-  de-duplicated to one entry per song (most recent play), most-recent-first, with
-  `count`/`offset` paging and a non-standard `playedAt` attribute. Auth is
-  **forward-and-validate**: the request's own `u`/`t`/`s` are checked against
-  upstream `ping`, so results are scoped to the requesting user and no
-  credentials or user table live here. Errors use Subsonic codes (40 wrong
-  creds, 10 missing param) with HTTP 200, as Subsonic clients expect.
+- **Recently played songs** — `getRecentlyPlayed`: a cross-device, de-duplicated,
+  most-recent-first song list. The gap that started this: the Subsonic API and
+  Navidrome only expose recently-played *albums*.
+- **On Repeat** — `getOnRepeat`: your most-replayed *songs* (default: ≥3 plays in
+  the last 30 days), with a non-standard `playCount` attribute.
+- **Songs for you** — `getSongsForYou`: a personalized daily mix from your play
+  history (your rotation + similar-artist discovery via `getArtistInfo2` +
+  serendipity), each track tagged with a `reason`. Falls back to favourites +
+  random for a new listener.
+- **Fast artist play** — `getArtistSongs`: a whole discography in one client
+  round-trip; the proxy does the per-album fan-out server-side, concurrently.
+- **Listening stats + web app** — `GET /api/stats` (totals, top artists/songs,
+  plays-by-day) and an embedded single-page app at **`/app/`** (history +
+  Wrapped-style stats), served from the same binary.
 
-- **M4 — Embedded SPA + stats API (current):** a single-page web app served from
-  the binary at `/app/` (history timeline + Wrapped-style stats), backed by a new
-  `GET /api/stats` JSON endpoint that aggregates the play store (totals, top
-  artists, top songs, plays-by-day). The SPA authenticates with Navidrome
-  credentials using salt+token (the password never goes on the wire), the same
-  way the native apps do.
+**Backwards compatible by design.** Everything standard is forwarded to
+Navidrome untouched, so a plain Subsonic client works through the proxy exactly
+as before. The Maraetai apps gate the extensions behind an explicit *server
+type* setting and fall back to standard behaviour on a plain server.
 
-Planned:
-
-- **M3** — wire the recents call into the Maraetai apps.
+**Auth model.** The proxy stores no passwords and keeps no user table — its own
+endpoints **forward-and-validate**: the request's own `u`/`t`/`s` are checked
+against upstream `ping`, so results are scoped to the requesting user and
+Navidrome stays the source of truth. Responses are Subsonic-shaped (XML default,
+JSON, JSONP) and use Subsonic error codes (HTTP 200 with an in-body status), as
+clients expect.
 
 ## How it works
 
@@ -113,16 +115,38 @@ docker compose -f docker-compose.existing.yml up -d
 Or without compose:
 
 ```sh
-docker run -d --name maraetai-service \
+docker run -d --name maraetai-service --restart unless-stopped \
   --network <your-navidrome-network> \
   -e NAVIDROME_URL=http://<navidrome-container>:4533 \
   -p 4534:4534 -v maraetai-data:/data \
   ghcr.io/unclefroob/maraetai-service:latest
+# point the Maraetai apps at http://<host>:4534
 ```
 
 The proxy doesn't probe Navidrome at startup (it forwards lazily, per request),
 so start order doesn't matter — bring it up before or after Navidrome and it
 works once Navidrome is reachable. The image's `HEALTHCHECK` reports readiness.
+
+**Persistence.** The image runs as a non-root user (uid 65532) and stores the
+play-history DB at `/data/maraetai.db` (baked-in `DB_PATH`). Keep the
+`maraetai-data` volume mounted — omit it and your play history is lost on every
+recreate. A fresh volume gets the right owner automatically; if you attach a
+volume previously written as root, fix its ownership once:
+
+```sh
+docker run --rm -v maraetai-data:/data alpine chown -R 65532:65532 /data
+```
+
+### Updating
+
+The image republishes to GHCR on every push to `main`. To move a running
+container to the latest (the named volume keeps your history):
+
+```sh
+docker pull ghcr.io/unclefroob/maraetai-service:latest
+docker rm -f maraetai-service
+# then re-run the same `docker run …` as above
+```
 
 ### All-in-one (proxy + a fresh Navidrome)
 
