@@ -57,9 +57,11 @@
       </div>
       <div class="np-center">
         <div class="np-controls">
+          <button id="np-shuffle" class="icon small" title="Shuffle">🔀</button>
           <button id="np-prev" class="icon" title="Previous">⏮</button>
           <button id="np-play" class="icon play" title="Play / pause">▶</button>
           <button id="np-next" class="icon" title="Next">⏭</button>
+          <button id="np-repeat" class="icon small" title="Repeat">🔁</button>
         </div>
         <div class="np-seek">
           <span id="np-cur" class="time">0:00</span>
@@ -68,10 +70,29 @@
         </div>
       </div>
       <div class="np-right">
+        <button id="np-lyrics" class="icon small" title="Lyrics">🎤</button>
+        <button id="np-queue" class="icon small" title="Queue">≣</button>
         <span class="icon vol">🔊</span>
         <input id="np-vol" type="range" min="0" max="100" value="100" />
       </div>
     </footer>
+
+    <!-- Queue panel (anchored above the player bar) -->
+    <div id="queue-panel" class="queue-panel hidden">
+      <div class="qp-head"><span>Queue</span><button id="qp-clear" class="ghost">Clear</button></div>
+      <div id="qp-list" class="qp-list"></div>
+    </div>
+
+    <!-- Lyrics overlay -->
+    <div id="lyrics-modal" class="modal hidden">
+      <div class="modal-card">
+        <div class="modal-head">
+          <span id="ly-title" class="np-title"></span>
+          <button id="ly-close" class="ghost">Close</button>
+        </div>
+        <div id="ly-body" class="lyrics"></div>
+      </div>
+    </div>
 
     <audio id="audio"></audio>
   </div>
