@@ -102,9 +102,7 @@ async function renderHome() {
   });
 }
 
-const LIB_TABS = [
-  ['albums', 'Albums'], ['artists', 'Artists'], ['playlists', 'Playlists'], ['favourites', 'Favourites'],
-];
+const LIB_TABS = [['albums', 'Albums'], ['artists', 'Artists']];
 let libTab = 'albums';
 
 async function renderLibrary() {
@@ -121,7 +119,7 @@ async function renderLibrary() {
     if (libTab === 'albums') {
       const albums = await api.albumList('alphabeticalByName', 100);
       body.innerHTML = `<div class="grid">${albumCardsHTML(albums)}</div>`;
-    } else if (libTab === 'artists') {
+    } else {
       const artists = await api.artistsIndex();
       body.innerHTML = `<div class="list">${artists.map((a) => `
         <a class="lrow" href="#/artist/${encodeURIComponent(a.id)}">
@@ -129,23 +127,61 @@ async function renderLibrary() {
           <div class="tmeta"><div class="ttitle">${esc(a.name)}</div>
           <div class="tsub muted">${a.albumCount || 0} albums</div></div>
         </a>`).join('')}</div>`;
-    } else if (libTab === 'playlists') {
-      const pls = await api.playlists();
-      body.innerHTML = `<div class="grid">${pls.map((p) => `
+    }
+  } catch (e) { body.innerHTML = `<div class="error">${esc(e.message)}</div>`; }
+}
+
+let myMusicTab = 'favourites';
+async function renderMyMusic() {
+  view().innerHTML = `
+    <h1 class="page-title">My Music</h1>
+    <div class="subtabs">
+      <button data-mm="favourites" class="${myMusicTab === 'favourites' ? 'active' : ''}">Favourites</button>
+      <button data-mm="recents" class="${myMusicTab === 'recents' ? 'active' : ''}">Recently played</button>
+    </div>
+    <div id="mm-body"></div>`;
+  view().querySelectorAll('[data-mm]').forEach((b) =>
+    b.addEventListener('click', () => { myMusicTab = b.dataset.mm; renderMyMusic(); }));
+  const body = $('#mm-body');
+  body.innerHTML = '<div class="loading">Loading…</div>';
+  try {
+    const songs = myMusicTab === 'favourites'
+      ? (await api.starred()).song || []
+      : await api.recentlyPlayed(100);
+    if (!songs.length) { body.innerHTML = '<div class="empty muted">Nothing here yet.</div>'; return; }
+    body.innerHTML = `
+      <div class="dh-actions list-actions">
+        <button id="mm-play" class="primary">▶ Play</button>
+        <button id="mm-shuffle" class="ghost">🔀 Shuffle</button>
+      </div>
+      <div class="tracklist">${songRowsHTML(songs)}</div>`;
+    wireSongRows(body, songs);
+    $('#mm-play').addEventListener('click', () => player.play(songs, 0));
+    $('#mm-shuffle').addEventListener('click', () => player.play(shuffle(songs), 0));
+  } catch (e) { body.innerHTML = `<div class="error">${esc(e.message)}</div>`; }
+}
+
+async function renderPlaylists() {
+  loading();
+  const pls = await api.playlists();
+  view().innerHTML = `<h1 class="page-title">Playlists</h1>` + (pls.length
+    ? `<div class="grid">${pls.map((p) => `
         <a class="card album" href="#/playlist/${encodeURIComponent(p.id)}">
           ${artHTML(p.coverArt, 200)}
           <div class="cname">${esc(p.name)}</div>
           <div class="csub muted">${p.songCount || 0} songs</div>
-        </a>`).join('')}</div>`;
-    } else {
-      const s = await api.starred();
-      const songs = s.song || [];
-      body.innerHTML = songs.length
-        ? `<div class="tracklist">${songRowsHTML(songs)}</div>`
-        : '<div class="empty muted">No favourites yet.</div>';
-      wireSongRows(body, songs);
-    }
-  } catch (e) { body.innerHTML = `<div class="error">${esc(e.message)}</div>`; }
+        </a>`).join('')}</div>`
+    : '<div class="empty muted">No playlists yet.</div>');
+}
+
+async function renderSidebarPlaylists() {
+  const el = $('#sidebar-playlists');
+  if (!el) return;
+  try {
+    const pls = await api.playlists();
+    el.innerHTML = pls.map((p) =>
+      `<a class="spl" href="#/playlist/${encodeURIComponent(p.id)}">${esc(p.name)}</a>`).join('');
+  } catch { el.innerHTML = ''; }
 }
 
 async function renderAlbum(id) {
@@ -291,11 +327,12 @@ function shuffle(arr) {
 function route() {
   const hash = location.hash.replace(/^#\/?/, '') || 'home';
   const [name, arg] = hash.split('/');
-  for (const b of document.querySelectorAll('.tabs button')) {
+  for (const b of document.querySelectorAll('[data-route]')) {
     b.classList.toggle('active', b.dataset.route === name);
   }
   const run = {
-    home: renderHome, library: renderLibrary, search: renderSearch, admin: renderAdmin,
+    home: renderHome, library: renderLibrary, search: renderSearch,
+    mymusic: renderMyMusic, playlists: renderPlaylists, admin: renderAdmin,
     album: () => renderAlbum(decodeURIComponent(arg)),
     artist: () => renderArtist(decodeURIComponent(arg)),
     playlist: () => renderPlaylist(decodeURIComponent(arg)),
@@ -320,6 +357,7 @@ async function enterApp() {
     navidromeUrl = (cfg && cfg.navidromeUrl) || '';
   } catch { isAdmin = false; }
   $('#nav-admin').classList.toggle('hidden', !isAdmin);
+  renderSidebarPlaylists();
 
   if (!location.hash) location.hash = '#/home';
   else route();
@@ -341,7 +379,7 @@ function initEvents() {
     }
   });
   $('#logout').addEventListener('click', () => { api.clearCreds(); location.hash = ''; location.reload(); });
-  for (const b of document.querySelectorAll('.tabs button')) {
+  for (const b of document.querySelectorAll('[data-route]')) {
     b.addEventListener('click', () => { location.hash = `#/${b.dataset.route}`; });
   }
   window.addEventListener('hashchange', route);

@@ -20,20 +20,28 @@
     </form>
   </main>
 
-  <!-- App -->
-  <div id="app" class="hidden">
-    <header class="topbar">
-      <span class="brand">Maraetai</span>
-      <nav class="tabs">
-        <button data-route="home" class="active">Home</button>
-        <button data-route="library">Library</button>
-        <button data-route="search">Search</button>
-        <button data-route="admin" id="nav-admin" class="hidden">Admin</button>
+  <!-- App: sidebar + content + full-width player bar (mirrors the macOS split view) -->
+  <div id="app" class="app-shell hidden">
+    <aside class="sidebar">
+      <div class="brand">Maraetai</div>
+      <nav class="snav">
+        <button data-route="home" class="snav-item">Home</button>
+        <button data-route="library" class="snav-item">Library</button>
+        <button data-route="search" class="snav-item">Search</button>
+        <button data-route="mymusic" class="snav-item">My Music</button>
       </nav>
-      <span class="spacer"></span>
-      <span id="who" class="muted"></span>
-      <button id="logout" class="ghost">Log out</button>
-    </header>
+      <div class="snav-section">
+        <button class="snav-header" data-route="playlists">Playlists</button>
+        <div id="sidebar-playlists" class="snav-playlists"></div>
+      </div>
+      <div class="snav-foot">
+        <button data-route="admin" id="nav-admin" class="snav-item hidden">Admin</button>
+        <div class="who-row">
+          <span id="who" class="muted"></span>
+          <button id="logout" class="ghost">Log out</button>
+        </div>
+      </div>
+    </aside>
 
     <main id="view" class="view"></main>
 
