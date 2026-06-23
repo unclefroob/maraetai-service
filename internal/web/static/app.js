@@ -36,7 +36,8 @@ function songRowsHTML(songs) {
 
 // Wire a rendered track list: a row plays the whole list from that point, the
 // heart favourites the song, and the ⋯ button opens a per-song action menu.
-function wireSongRows(container, songs) {
+// ctx (optional): { onRemove(i) } adds a "Remove from this playlist" action.
+function wireSongRows(container, songs, ctx) {
   container.querySelectorAll('.trow').forEach((row) => {
     const i = Number(row.dataset.idx);
     row.addEventListener('click', (e) => {
@@ -47,7 +48,7 @@ function wireSongRows(container, songs) {
     star.addEventListener('click', (e) => { e.stopPropagation(); toggleRowStar(star, songs[i]); });
     row.querySelector('.trow-more').addEventListener('click', (e) => {
       e.stopPropagation();
-      openMenu(e.currentTarget, songMenu(songs[i]));
+      openMenu(e.currentTarget, songMenu(songs[i], ctx && ctx.onRemove ? { onRemove: () => ctx.onRemove(i) } : null));
     });
   });
 }
@@ -66,15 +67,16 @@ async function toggleRowStar(btn, song) {
   }
 }
 
-// Per-song action menu (Play Next / Add to Queue / Go to Album / Go to Artist).
-// Add-to-Playlist arrives with the read/write-playlists feature.
-function songMenu(song) {
+// Per-song action menu. ctx (optional): { onRemove } adds a remove-from-playlist item.
+function songMenu(song, ctx) {
   const items = [
     { label: 'Play Next', action: () => { player.playNext(song); toast('Playing next'); } },
     { label: 'Add to Queue', action: () => { player.enqueue(song); toast('Added to queue'); } },
+    { label: 'Add to Playlist…', action: () => addToPlaylistDialog(song) },
   ];
   if (song.albumId) items.push({ label: 'Go to Album', action: () => { location.hash = `#/album/${encodeURIComponent(song.albumId)}`; } });
   if (song.artistId) items.push({ label: 'Go to Artist', action: () => { location.hash = `#/artist/${encodeURIComponent(song.artistId)}`; } });
+  if (ctx && ctx.onRemove) items.push({ label: 'Remove from this playlist', action: ctx.onRemove });
   return items;
 }
 
@@ -126,6 +128,104 @@ function toast(msg) {
   el.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove('show'), 1800);
+}
+
+// --- modal dialogs ------------------------------------------------------
+
+// promptDialog: single text field. Resolves to the trimmed value, or null if cancelled.
+function promptDialog(title, value = '', okLabel = 'Save') {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal';
+    overlay.innerHTML = `
+      <div class="modal-card pick">
+        <div class="modal-head"><span class="np-title">${esc(title)}</span><button class="ghost" data-x>Cancel</button></div>
+        <div class="pick-body">
+          <div class="pick-new">
+            <input class="pick-name" type="text" value="${esc(value)}" />
+            <button class="primary" data-ok>${esc(okLabel)}</button>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const done = (v) => { overlay.remove(); resolve(v); };
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) done(null); });
+    overlay.querySelector('[data-x]').addEventListener('click', () => done(null));
+    const submit = () => done(overlay.querySelector('.pick-name').value.trim() || null);
+    overlay.querySelector('[data-ok]').addEventListener('click', submit);
+    const inp = overlay.querySelector('.pick-name');
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); else if (e.key === 'Escape') done(null); });
+    inp.focus(); inp.select();
+  });
+}
+
+// confirmDialog: resolves true on confirm, false otherwise.
+function confirmDialog(title, body, okLabel = 'OK') {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal';
+    overlay.innerHTML = `
+      <div class="modal-card pick">
+        <div class="modal-head"><span class="np-title">${esc(title)}</span><button class="ghost" data-x>Cancel</button></div>
+        <div class="pick-body">
+          <p class="muted">${esc(body)}</p>
+          <div class="pick-actions">
+            <button class="ghost" data-cancel>Cancel</button>
+            <button class="primary danger" data-ok>${esc(okLabel)}</button>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const done = (v) => { overlay.remove(); resolve(v); };
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) done(false); });
+    overlay.querySelector('[data-x]').addEventListener('click', () => done(false));
+    overlay.querySelector('[data-cancel]').addEventListener('click', () => done(false));
+    overlay.querySelector('[data-ok]').addEventListener('click', () => done(true));
+  });
+}
+
+// addToPlaylistDialog: pick an existing playlist or create one, then add the song.
+async function addToPlaylistDialog(song) {
+  let pls = [];
+  try { pls = await api.playlists(); } catch {}
+  const overlay = document.createElement('div');
+  overlay.className = 'modal';
+  overlay.innerHTML = `
+    <div class="modal-card pick">
+      <div class="modal-head"><span class="np-title">Add to playlist</span><button class="ghost" data-x>Close</button></div>
+      <div class="pick-body">
+        <div class="pick-new">
+          <input class="pick-name" type="text" placeholder="New playlist name…" />
+          <button class="primary" data-new>Create</button>
+        </div>
+        <div class="pick-list">
+          ${pls.length
+            ? pls.map((p) => `<button class="pick-row" data-pid="${esc(p.id)}"><span>${esc(p.name)}</span><span class="muted">${p.songCount || 0}</span></button>`).join('')
+            : '<div class="empty muted">No playlists yet — create one above.</div>'}
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  overlay.querySelector('[data-x]').addEventListener('click', close);
+  overlay.querySelectorAll('.pick-row').forEach((b) => b.addEventListener('click', async () => {
+    try { await api.updatePlaylist({ playlistId: b.dataset.pid, songIdToAdd: song.id }); toast('Added to playlist'); close(); }
+    catch { toast('Could not add to playlist'); }
+  }));
+  const create = async () => {
+    const name = overlay.querySelector('.pick-name').value.trim();
+    if (!name) return;
+    try {
+      const pl = await api.createPlaylist(name);
+      if (pl && pl.id) await api.updatePlaylist({ playlistId: pl.id, songIdToAdd: song.id });
+      toast('Added to playlist'); renderSidebarPlaylists(); close();
+    } catch { toast('Could not create playlist'); }
+  };
+  overlay.querySelector('[data-new]').addEventListener('click', create);
+  const inp = overlay.querySelector('.pick-name');
+  inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') create(); });
+  inp.focus();
 }
 
 function songCardsHTML(songs) {
@@ -438,7 +538,11 @@ async function renderMyMusic() {
 async function renderPlaylists() {
   loading();
   const pls = await api.playlists();
-  view().innerHTML = `<h1 class="page-title">Playlists</h1>` + (pls.length
+  view().innerHTML = `
+    <div class="page-head">
+      <h1 class="page-title">Playlists</h1>
+      <button id="pl-new" class="ghost">+ New playlist</button>
+    </div>` + (pls.length
     ? `<div class="grid">${pls.map((p) => `
         <a class="card album" href="#/playlist/${encodeURIComponent(p.id)}">
           ${artHTML(p.coverArt, 200)}
@@ -446,6 +550,12 @@ async function renderPlaylists() {
           <div class="csub muted">${p.songCount || 0} songs</div>
         </a>`).join('')}</div>`
     : '<div class="empty muted">No playlists yet.</div>');
+  $('#pl-new').addEventListener('click', async () => {
+    const name = await promptDialog('New playlist', '', 'Create');
+    if (!name) return;
+    try { await api.createPlaylist(name); toast('Playlist created'); renderSidebarPlaylists(); renderPlaylists(); }
+    catch { toast('Could not create playlist'); }
+  });
 }
 
 async function renderSidebarPlaylists() {
@@ -551,13 +661,31 @@ async function renderPlaylist(id) {
         <div class="dh-actions">
           <button id="play-all" class="primary">${SVG_PLAY}Play</button>
           <button id="shuffle-all" class="ghost">${SVG_SHUFFLE}Shuffle</button>
+          <button id="pl-rename" class="ghost">Rename</button>
+          <button id="pl-delete" class="ghost">Delete</button>
         </div>
       </div>
     </div>
     <div class="tracklist">${songRowsHTML(songs)}</div>`;
-  wireSongRows(view(), songs);
+  const removeFromPlaylist = async (i) => {
+    try { await api.updatePlaylist({ playlistId: id, songIndexToRemove: i }); renderPlaylist(id); }
+    catch { toast('Could not remove song'); }
+  };
+  wireSongRows(view(), songs, { onRemove: removeFromPlaylist });
   $('#play-all').addEventListener('click', () => player.play(songs, 0));
   $('#shuffle-all').addEventListener('click', () => player.play(shuffle(songs), 0));
+  $('#pl-rename').addEventListener('click', async () => {
+    const name = await promptDialog('Rename playlist', p.name, 'Rename');
+    if (!name || name === p.name) return;
+    try { await api.updatePlaylist({ playlistId: id, name }); renderSidebarPlaylists(); renderPlaylist(id); }
+    catch { toast('Could not rename playlist'); }
+  });
+  $('#pl-delete').addEventListener('click', async () => {
+    const ok = await confirmDialog(`Delete "${p.name}"?`, 'This removes the playlist for everyone on the server.', 'Delete');
+    if (!ok) return;
+    try { await api.deletePlaylist(id); renderSidebarPlaylists(); location.hash = '#/playlists'; }
+    catch { toast('Could not delete playlist'); }
+  });
 }
 
 function renderSearch() {
