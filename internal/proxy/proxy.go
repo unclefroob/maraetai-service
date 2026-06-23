@@ -7,6 +7,7 @@
 package proxy
 
 import (
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"net/http/httputil"
@@ -23,7 +24,10 @@ import (
 //
 // If st is non-nil, scrobble requests are tee'd into the play store before
 // being forwarded. A nil store yields a pure passthrough proxy.
-func New(upstream *url.URL, st *store.Store, log *slog.Logger) http.Handler {
+//
+// navidromePublicURL is an optional browser-reachable Navidrome URL surfaced to
+// the web app (admin "manage users" link-out); empty disables the link.
+func New(upstream *url.URL, st *store.Store, navidromePublicURL string, log *slog.Logger) http.Handler {
 	rp := httputil.NewSingleHostReverseProxy(upstream)
 
 	// FlushInterval -1 flushes writes to the client immediately, so audio
@@ -98,6 +102,13 @@ func New(upstream *url.URL, st *store.Store, log *slog.Logger) http.Handler {
 		mux.Handle("/app/", http.StripPrefix("/app/", web.Handler()))
 		mux.HandleFunc("/app", func(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/app/", http.StatusMovedPermanently)
+		})
+
+		// Non-secret client config for the web app (e.g. the Navidrome admin
+		// URL for the "manage users" link-out). No auth: it exposes only a URL.
+		mux.HandleFunc("/api/config", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			_ = json.NewEncoder(w).Encode(map[string]string{"navidromeUrl": navidromePublicURL})
 		})
 	}
 

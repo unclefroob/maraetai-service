@@ -16,6 +16,10 @@ type Config struct {
 	NavidromeURL *url.URL
 	// DBPath is the path to the SQLite play-history database.
 	DBPath string
+	// NavidromePublicURL is the browser-reachable Navidrome URL, surfaced to the
+	// web app's admin section for the "manage users in Navidrome" link-out.
+	// Optional — the admin UI shows guidance when it's empty.
+	NavidromePublicURL string
 }
 
 // Load reads configuration from the environment and validates it.
@@ -46,8 +50,9 @@ func Load() (*Config, error) {
 	}
 
 	return &Config{
-		ListenAddr:   addr,
-		NavidromeURL: u,
-		DBPath:       dbPath,
+		ListenAddr:         addr,
+		NavidromeURL:       u,
+		DBPath:             dbPath,
+		NavidromePublicURL: strings.TrimSpace(os.Getenv("NAVIDROME_PUBLIC_URL")),
 	}, nil
 }

@@ -44,7 +44,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:              cfg.ListenAddr,
-		Handler:           proxy.New(cfg.NavidromeURL, st, log),
+		Handler:           proxy.New(cfg.NavidromeURL, st, cfg.NavidromePublicURL, log),
 		ReadHeaderTimeout: 10 * time.Second,
 		// No write timeout: audio streams are long-lived.
 	}
