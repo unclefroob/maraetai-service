@@ -148,6 +148,45 @@ button { font: inherit; cursor: pointer; }
 .tsub { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tdur { font-size: 13px; }
 
+/* Per-row actions (favourite + ⋯ menu): revealed on hover, but a favourited
+   heart stays visible. Kept in layout (opacity, not display) so rows don't shift. */
+.trow-actions { display: flex; align-items: center; gap: 2px; flex: none; }
+.trow-star, .trow-more {
+  background: transparent; border: 0; padding: 4px; border-radius: 6px;
+  color: var(--muted); line-height: 1; opacity: 0; transition: opacity .12s, color .12s;
+}
+.trow-star { font-size: 16px; }
+.trow-more { display: inline-flex; align-items: center; }
+.trow-more .bi { width: 18px; height: 18px; }
+.trow:hover .trow-star, .trow:hover .trow-more,
+.trow-star:focus-visible, .trow-more:focus-visible { opacity: .85; }
+.trow-star:hover, .trow-more:hover { color: var(--text); opacity: 1; }
+.trow-star.on { color: var(--accent); opacity: 1; }
+/* Touch devices have no hover — keep the row actions reachable. */
+@media (hover: none) { .trow-star, .trow-more { opacity: .85; } }
+
+/* Floating context menu (per-song actions) */
+.ctx-menu {
+  position: fixed; z-index: 60; min-width: 184px;
+  background: var(--surface2); border: 1px solid var(--line); border-radius: 10px;
+  padding: 6px; box-shadow: 0 12px 32px rgba(0, 0, 0, .5);
+}
+.ctx-item {
+  display: block; width: 100%; text-align: left; background: transparent; border: 0;
+  color: var(--text); padding: 8px 12px; border-radius: 6px; font-size: 14px;
+}
+.ctx-item:hover { background: var(--surface); }
+
+/* Transient toast (queue confirmations), pinned above the player bar */
+.toast {
+  position: fixed; left: 50%; bottom: 104px; z-index: 70;
+  transform: translateX(-50%) translateY(8px);
+  background: var(--surface2); color: var(--text); border: 1px solid var(--line);
+  padding: 10px 16px; border-radius: 999px; font-size: 13px;
+  opacity: 0; pointer-events: none; transition: opacity .18s, transform .18s;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
 /* Detail header */
 .detail-head { display: flex; gap: 24px; align-items: flex-end; margin-bottom: 24px; }
 .detail-head .art { width: 200px; height: 200px; border-radius: 12px; object-fit: cover; }
