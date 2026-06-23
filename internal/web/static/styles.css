@@ -146,7 +146,22 @@ button { font: inherit; cursor: pointer; }
 .dh-meta h1 { margin: 6px 0; font-size: 30px; }
 .dh-kind { font-size: 12px; letter-spacing: 2px; }
 .dh-actions { margin-top: 16px; display: flex; gap: 10px; }
-.primary { background: var(--accent); color: #04130a; border: 0; padding: 10px 18px; border-radius: 999px; font-weight: 600; display: inline-block; }
+.primary { background: var(--accent); color: var(--accent-ink); border: 0; padding: 10px 18px; border-radius: 999px; font-weight: 600; display: inline-block; }
+.love.on { color: var(--accent); border-color: var(--accent); }
+
+/* Album-card hover play overlay (matches macOS card hover) */
+.art-wrap { position: relative; }
+.card-play {
+  position: absolute; right: 8px; bottom: 8px; width: 40px; height: 40px; border-radius: 50%;
+  background: var(--accent); color: var(--accent-ink); border: 0; font-size: 15px; cursor: pointer;
+  opacity: 0; transform: translateY(6px); transition: opacity .15s, transform .15s;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, .45);
+}
+.card:hover .card-play { opacity: 1; transform: translateY(0); }
+
+/* Genre rows + artist bio */
+.genre-ic { width: 48px; height: 48px; border-radius: var(--radius-sm); background: var(--surface2); display: grid; place-items: center; color: var(--muted); font-size: 20px; flex: none; }
+.bio { max-width: 820px; margin: 0 0 24px; line-height: 1.6; }
 
 /* Search */
 .searchbar { margin-bottom: 20px; }
