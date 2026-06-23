@@ -94,6 +94,15 @@ func fakeNavidrome(t *testing.T, scrobbleHits *int32) *httptest.Server {
 			{"id":"fav2","title":"Second Fave","artist":"Fave","album":"F","albumId":"alF","duration":200},
 			{"id":"fav3","title":"Third Fave","artist":"Fave","album":"F","albumId":"alF","duration":220}]}}}`)
 	})
+	mux.HandleFunc("/rest/getArtists.view", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"subsonic-response":{"status":"ok","artists":{"index":[
+			{"name":"A","artist":[
+				{"id":"ar1","name":"AGA","coverArt":"c1","albumCount":3},
+				{"id":"ar2","name":"Avril","coverArt":"c2","albumCount":5}]},
+			{"name":"M","artist":[
+				{"id":"ar3","name":"Massive Attack","coverArt":"c3","albumCount":4}]}]}}}`)
+	})
 	// ping for forward-and-validate auth: bad token => failed status (200).
 	mux.HandleFunc("/rest/ping.view", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

@@ -53,6 +53,26 @@ type ArtistRef struct {
 	Name string `json:"name"`
 }
 
+// Artist is a library artist (from the getArtists index).
+type Artist struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	CoverArt   string `json:"coverArt"`
+	AlbumCount int    `json:"albumCount"`
+}
+
+type artistsResponse struct {
+	Response struct {
+		Status  string `json:"status"`
+		Artists *struct {
+			Index []struct {
+				Artist []Artist `json:"artist"`
+			} `json:"index"`
+		} `json:"artists"`
+		Error *apiError `json:"error"`
+	} `json:"subsonic-response"`
+}
+
 type apiError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
@@ -209,6 +229,23 @@ func (c *Client) GetStarredSongs(ctx context.Context, auth url.Values) ([]Song, 
 // GetSimilarArtists returns artists similar to the given artist id (getArtistInfo2).
 // Tolerant: this can call out to last.fm via Navidrome, so callers treat a
 // failure/empty as "no discovery" rather than fatal.
+// GetArtists returns the full library artist index, flattened across index
+// groups (the proxy pages it for getArtistList).
+func (c *Client) GetArtists(ctx context.Context, auth url.Values) ([]Artist, error) {
+	var ar artistsResponse
+	if err := c.get(ctx, "getArtists.view", nil, auth, &ar); err != nil {
+		return nil, err
+	}
+	if ar.Response.Status != "ok" || ar.Response.Artists == nil {
+		return nil, subsonicError(ar.Response.Error, "getArtists")
+	}
+	var out []Artist
+	for _, idx := range ar.Response.Artists.Index {
+		out = append(out, idx.Artist...)
+	}
+	return out, nil
+}
+
 func (c *Client) GetSimilarArtists(ctx context.Context, artistID string, count int, auth url.Values) ([]ArtistRef, error) {
 	var ar artistInfoResponse
 	extra := url.Values{"id": {artistID}, "count": {strconv.Itoa(count)}}
