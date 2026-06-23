@@ -11,6 +11,10 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) =>
 let isAdmin = false;
 let navidromeUrl = '';
 
+// Monochrome button glyphs (respect currentColor) — no coloured emoji.
+const SVG_PLAY = '<svg class="bi" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>';
+const SVG_SHUFFLE = '<svg class="bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>';
+
 // --- shared render helpers ---------------------------------------------
 
 function songRowsHTML(songs) {
@@ -47,7 +51,7 @@ function albumCardsHTML(albums) {
     <a class="card album" href="#/album/${encodeURIComponent(a.id)}">
       <div class="art-wrap">
         ${artHTML(a.coverArt, 200)}
-        <button class="card-play" data-play-album="${esc(a.id)}" title="Play">▶</button>
+        <button class="card-play" data-play-album="${esc(a.id)}" title="Play">${SVG_PLAY}</button>
       </div>
       <div class="cname">${esc(a.name)}</div>
       <div class="csub muted">${esc(a.artist || '')}</div>
@@ -123,8 +127,8 @@ const heroShell = `
       <img class="hero-art" id="hero-art" alt="" />
     </div>
     <div class="hero-actions">
-      <button class="hero-pill play" id="hero-play">▶ Play</button>
-      <button class="hero-pill" id="hero-shuffle">Shuffle</button>
+      <button class="hero-pill play" id="hero-play">${SVG_PLAY}Play</button>
+      <button class="hero-pill" id="hero-shuffle">${SVG_SHUFFLE}Shuffle</button>
     </div>
   </section>`;
 
@@ -187,7 +191,7 @@ function renderDailyMix(tracks) {
           <div class="mix-sub muted">${tracks.length} hand-picked tracks</div>
         </div>
       </a>
-      <button class="mix-play" id="mix-play" title="Play">▶</button>
+      <button class="mix-play" id="mix-play" title="Play">${SVG_PLAY}</button>
     </section>`;
   $('#mix-play').addEventListener('click', () => player.play(tracks, 0));
 }
@@ -228,8 +232,8 @@ async function renderSongCollection(title, fetcher, note) {
     + (note ? `<p class="bio muted">${esc(note)}</p>` : '')
     + (songs.length ? `
       <div class="dh-actions list-actions">
-        <button id="col-play" class="primary">▶ Play</button>
-        <button id="col-shuffle" class="ghost">Shuffle</button>
+        <button id="col-play" class="primary">${SVG_PLAY}Play</button>
+        <button id="col-shuffle" class="ghost">${SVG_SHUFFLE}Shuffle</button>
       </div>
       <div class="tracklist">${songRowsHTML(songs)}</div>`
       : '<div class="empty muted">Nothing here yet.</div>');
@@ -329,8 +333,8 @@ async function renderMyMusic() {
     if (!songs.length) { body.innerHTML = '<div class="empty muted">Nothing here yet.</div>'; return; }
     body.innerHTML = `
       <div class="dh-actions list-actions">
-        <button id="mm-play" class="primary">▶ Play</button>
-        <button id="mm-shuffle" class="ghost">Shuffle</button>
+        <button id="mm-play" class="primary">${SVG_PLAY}Play</button>
+        <button id="mm-shuffle" class="ghost">${SVG_SHUFFLE}Shuffle</button>
       </div>
       <div class="tracklist">${songRowsHTML(songs)}</div>`;
     wireSongRows(body, songs);
@@ -375,8 +379,8 @@ async function renderAlbum(id) {
         <h1>${esc(a.name)}</h1>
         <div class="muted">${esc(a.artist || '')}${a.year ? ' • ' + a.year : ''} • ${songs.length} songs</div>
         <div class="dh-actions">
-          <button id="play-all" class="primary">▶ Play</button>
-          <button id="shuffle-all" class="ghost">Shuffle</button>
+          <button id="play-all" class="primary">${SVG_PLAY}Play</button>
+          <button id="shuffle-all" class="ghost">${SVG_SHUFFLE}Shuffle</button>
           <button id="album-love" class="ghost love ${a.starred ? 'on' : ''}">${a.starred ? '♥' : '♡'} Love</button>
         </div>
       </div>
@@ -420,7 +424,7 @@ async function renderArtist(id) {
         <div class="dh-kind muted">ARTIST</div>
         <h1>${esc(a.name)}</h1>
         <div class="muted">${albums.length} albums</div>
-        <div class="dh-actions"><button id="play-pop" class="primary">▶ Play</button></div>
+        <div class="dh-actions"><button id="play-pop" class="primary">${SVG_PLAY}Play</button></div>
       </div>
     </div>`];
   if (bio) parts.push(`<p class="bio muted">${esc(bio)}</p>`);
@@ -453,8 +457,8 @@ async function renderPlaylist(id) {
         <h1>${esc(p.name)}</h1>
         <div class="muted">${songs.length} songs</div>
         <div class="dh-actions">
-          <button id="play-all" class="primary">▶ Play</button>
-          <button id="shuffle-all" class="ghost">Shuffle</button>
+          <button id="play-all" class="primary">${SVG_PLAY}Play</button>
+          <button id="shuffle-all" class="ghost">${SVG_SHUFFLE}Shuffle</button>
         </div>
       </div>
     </div>

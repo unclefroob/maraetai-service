@@ -49,7 +49,7 @@ button { font: inherit; cursor: pointer; }
   display: grid; grid-template-columns: 240px 1fr; grid-template-rows: 1fr auto;
   height: 100vh; overflow: hidden;
 }
-.ghost { background: transparent; border: 1px solid var(--line); color: var(--muted); padding: 6px 10px; border-radius: 8px; font-size: 13px; }
+.ghost { background: transparent; border: 1px solid var(--line); color: var(--muted); padding: 6px 10px; border-radius: 8px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; }
 
 /* Sidebar */
 .sidebar {
@@ -113,7 +113,7 @@ button { font: inherit; cursor: pointer; }
 .hero-note { font-size: 12px; color: rgba(255, 255, 255, .6); margin-top: 6px; }
 .hero-art { width: 96px; height: 96px; border-radius: 8px; object-fit: cover; flex: none; box-shadow: 0 6px 18px rgba(0, 0, 0, .4); }
 .hero-actions { display: flex; gap: 10px; margin-top: 18px; }
-.hero-pill { border: 0; border-radius: 999px; padding: 9px 22px; font-weight: 600; font-size: 14px; color: #fff; background: rgba(255, 255, 255, .18); cursor: pointer; }
+.hero-pill { border: 0; border-radius: 999px; padding: 9px 22px; font-weight: 600; font-size: 14px; color: #fff; background: rgba(255, 255, 255, .18); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
 .hero-pill.play { background: var(--accent); color: var(--accent-ink); }
 
 /* Home: "Songs for You" as one Daily Mix tile (maraetai getSongsForYou) */
@@ -154,8 +154,10 @@ button { font: inherit; cursor: pointer; }
 .dh-meta h1 { margin: 6px 0; font-size: 30px; }
 .dh-kind { font-size: 12px; letter-spacing: 2px; }
 .dh-actions { margin-top: 16px; display: flex; gap: 10px; }
-.primary { background: var(--accent); color: var(--accent-ink); border: 0; padding: 10px 18px; border-radius: 999px; font-weight: 600; display: inline-block; }
+.primary { background: var(--accent); color: var(--accent-ink); border: 0; padding: 10px 18px; border-radius: 999px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
 .love.on { color: var(--accent); border-color: var(--accent); }
+/* Inline button glyphs (Play / Shuffle) — sized to the button text. */
+.bi { width: 1.1em; height: 1.1em; flex: none; }
 
 /* Album-card hover play overlay (matches macOS card hover) */
 .art-wrap { position: relative; }
@@ -163,7 +165,7 @@ button { font: inherit; cursor: pointer; }
   position: absolute; right: 8px; bottom: 8px; width: 40px; height: 40px; border-radius: 50%;
   background: var(--accent); color: var(--accent-ink); border: 0; font-size: 15px; cursor: pointer;
   opacity: 0; transform: translateY(6px); transition: opacity .15s, transform .15s;
-  box-shadow: 0 6px 14px rgba(0, 0, 0, .45);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, .45); display: grid; place-items: center;
 }
 .card:hover .card-play { opacity: 1; transform: translateY(0); }
 
