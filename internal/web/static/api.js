@@ -123,6 +123,21 @@ export async function playlist(id) {
   return b.playlist || null;
 }
 
+// createPlaylist makes an empty playlist and returns it (or null if the server
+// doesn't echo the new playlist back).
+export async function createPlaylist(name) {
+  const b = await get('/rest/createPlaylist.view', { name });
+  return b.playlist || null;
+}
+
+// updatePlaylist renames and/or adds/removes a single song. songIndexToRemove is
+// the song's position within the playlist; songIdToAdd appends a song.
+export function updatePlaylist({ playlistId, name, comment, songIdToAdd, songIndexToRemove }) {
+  return get('/rest/updatePlaylist.view', { playlistId, name, comment, songIdToAdd, songIndexToRemove });
+}
+
+export const deletePlaylist = (id) => get('/rest/deletePlaylist.view', { id });
+
 export async function starred() {
   const b = await get('/rest/getStarred2.view');
   return b.starred2 || { song: [], album: [], artist: [] };
