@@ -1,238 +1,358 @@
-import { md5 } from './md5.js';
+// Web player + admin shell. Hash-routed vanilla-JS SPA over the proxy's Subsonic
+// + maraetai endpoints. Playback/queue/scrobble live in player.js; API in api.js.
+import * as api from './api.js';
+import * as player from './player.js';
 
-const CLIENT = 'maraetai-web';
-const API_VERSION = '1.16.1';
-const SESSION_KEY = 'maraetai.creds';
+const $ = (sel) => document.querySelector(sel);
+const view = () => $('#view');
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-// --- auth ---------------------------------------------------------------
+let isAdmin = false;
+let navidromeUrl = '';
 
-let creds = null; // { username, password }
+// --- shared render helpers ---------------------------------------------
 
-function loadCreds() {
-  try {
-    const raw = sessionStorage.getItem(SESSION_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
+function songRowsHTML(songs) {
+  return songs.map((s, i) => `
+    <div class="trow" data-idx="${i}">
+      <span class="tnum">${i + 1}</span>
+      <div class="tmeta">
+        <div class="ttitle">${esc(s.title || 'Unknown')}</div>
+        <div class="tsub muted">${esc([s.artist, s.album].filter(Boolean).join(' • '))}</div>
+      </div>
+      <span class="tdur muted">${fmtDur(s.duration)}</span>
+    </div>`).join('');
 }
 
-function saveCreds(c) {
-  creds = c;
-  sessionStorage.setItem(SESSION_KEY, JSON.stringify(c));
-}
-
-function clearCreds() {
-  creds = null;
-  sessionStorage.removeItem(SESSION_KEY);
-}
-
-function randomSalt() {
-  const bytes = new Uint8Array(8);
-  crypto.getRandomValues(bytes);
-  return [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-// authParams returns a fresh Subsonic auth query (random salt + token) so the
-// password never goes on the wire.
-function authParams() {
-  const salt = randomSalt();
-  const params = new URLSearchParams({
-    u: creds.username,
-    t: md5(creds.password + salt),
-    s: salt,
-    c: CLIENT,
-    v: API_VERSION,
-    f: 'json',
+// Wire a rendered track list so a row plays the whole list from that point.
+function wireSongRows(container, songs) {
+  container.querySelectorAll('.trow').forEach((row) => {
+    row.addEventListener('click', () => player.play(songs, Number(row.dataset.idx)));
   });
-  return params;
 }
 
-// subsonicGet calls a Subsonic endpoint and returns its parsed body, throwing
-// on a failed status.
-async function subsonicGet(path, extra = {}) {
-  const params = authParams();
-  for (const [k, v] of Object.entries(extra)) params.set(k, v);
-  const res = await fetch(`${path}?${params.toString()}`);
-  const body = (await res.json())['subsonic-response'];
-  if (!body || body.status !== 'ok') {
-    const msg = body && body.error ? body.error.message : `request failed (${res.status})`;
-    throw new Error(msg);
-  }
-  return body;
+function songCardsHTML(songs) {
+  return songs.map((s, i) => `
+    <button class="card song" data-idx="${i}">
+      ${artHTML(s.coverArt, 160)}
+      <div class="cname">${esc(s.title || 'Unknown')}</div>
+      <div class="csub muted">${esc(s.artist || '')}</div>
+      ${s.reason ? `<div class="creason muted">${esc(s.reason)}</div>` : ''}
+    </button>`).join('');
 }
 
-// coverArtURL builds an authenticated cover-art URL for an <img>.
-function coverArtURL(id, size = 96) {
-  const params = authParams();
-  params.set('id', id);
-  params.set('size', String(size));
-  return `/rest/getCoverArt.view?${params.toString()}`;
+function albumCardsHTML(albums) {
+  return albums.map((a) => `
+    <a class="card album" href="#/album/${encodeURIComponent(a.id)}">
+      ${artHTML(a.coverArt, 200)}
+      <div class="cname">${esc(a.name)}</div>
+      <div class="csub muted">${esc(a.artist || '')}</div>
+    </a>`).join('');
 }
+
+function artHTML(id, size) {
+  return id
+    ? `<img class="art" loading="lazy" src="${api.coverArtURL(id, size)}" alt="" />`
+    : `<div class="art noart"></div>`;
+}
+
+function shelfHTML(title, inner) {
+  return `<section class="shelf"><h2>${esc(title)}</h2><div class="scroller">${inner}</div></section>`;
+}
+
+function fmtDur(sec) {
+  if (!sec) return '';
+  const m = Math.floor(sec / 60);
+  return `${m}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
+}
+
+function loading() { view().innerHTML = '<div class="loading">Loading…</div>'; }
+function fail(e) { view().innerHTML = `<div class="error">${esc(e.message || e)}</div>`; }
 
 // --- views --------------------------------------------------------------
 
-const $ = (sel) => document.querySelector(sel);
+async function renderHome() {
+  loading();
+  const [onRep, forYou, recents, newest, frequent] = await Promise.all([
+    api.onRepeat(20).catch(() => []),
+    api.songsForYou(20).catch(() => []),
+    api.recentlyPlayed(30).catch(() => []),
+    api.albumList('newest', 20).catch(() => []),
+    api.albumList('frequent', 20).catch(() => []),
+  ]);
+  const sections = [];
+  if (onRep.length) sections.push(['On Repeat', songCardsHTML(onRep), onRep]);
+  if (forYou.length) sections.push(['Songs for you', songCardsHTML(forYou), forYou]);
+  if (recents.length) sections.push(['Recently played', songCardsHTML(recents), recents]);
+  if (newest.length) sections.push(['Recently added', albumCardsHTML(newest), null]);
+  if (frequent.length) sections.push(['Most played', albumCardsHTML(frequent), null]);
 
-function show(el) { el.classList.remove('hidden'); }
-function hide(el) { el.classList.add('hidden'); }
+  view().innerHTML = sections.length
+    ? sections.map(([t, html]) => shelfHTML(t, html)).join('')
+    : '<div class="empty muted">Nothing here yet — play some music.</div>';
 
-function relativeTime(unixSeconds) {
-  if (!unixSeconds) return '';
-  const diff = Date.now() / 1000 - unixSeconds;
-  const mins = Math.round(diff / 60);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.round(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.round(hrs / 24);
-  if (days < 30) return `${days}d ago`;
-  return new Date(unixSeconds * 1000).toLocaleDateString();
+  // Wire song shelves (album shelves are links).
+  view().querySelectorAll('.shelf').forEach((sec, i) => {
+    const songs = sections[i][2];
+    if (!songs) return;
+    sec.querySelectorAll('.song').forEach((card) => {
+      card.addEventListener('click', () => player.play(songs, Number(card.dataset.idx)));
+    });
+  });
 }
 
-async function loadHistory() {
-  const list = $('#history-list');
-  const empty = $('#history-empty');
-  list.innerHTML = '';
-  hide(empty);
-  const body = await subsonicGet('/rest/getRecentlyPlayed.view', { count: '100' });
-  const songs = (body.recentlyPlayed && body.recentlyPlayed.song) || [];
-  if (songs.length === 0) {
-    show(empty);
-    return;
-  }
-  for (const s of songs) {
-    const row = document.createElement('div');
-    row.className = 'row';
-    const art = s.coverArt
-      ? `<img loading="lazy" src="${coverArtURL(s.coverArt)}" alt="" />`
-      : `<div class="noart"></div>`;
-    row.innerHTML = `
-      ${art}
-      <div class="meta">
-        <div class="title"></div>
-        <div class="sub"></div>
+const LIB_TABS = [
+  ['albums', 'Albums'], ['artists', 'Artists'], ['playlists', 'Playlists'], ['favourites', 'Favourites'],
+];
+let libTab = 'albums';
+
+async function renderLibrary() {
+  view().innerHTML = `
+    <div class="subtabs">
+      ${LIB_TABS.map(([k, l]) => `<button data-lib="${k}" class="${k === libTab ? 'active' : ''}">${l}</button>`).join('')}
+    </div>
+    <div id="lib-body"></div>`;
+  view().querySelectorAll('[data-lib]').forEach((b) =>
+    b.addEventListener('click', () => { libTab = b.dataset.lib; renderLibrary(); }));
+  const body = $('#lib-body');
+  body.innerHTML = '<div class="loading">Loading…</div>';
+  try {
+    if (libTab === 'albums') {
+      const albums = await api.albumList('alphabeticalByName', 100);
+      body.innerHTML = `<div class="grid">${albumCardsHTML(albums)}</div>`;
+    } else if (libTab === 'artists') {
+      const artists = await api.artistsIndex();
+      body.innerHTML = `<div class="list">${artists.map((a) => `
+        <a class="lrow" href="#/artist/${encodeURIComponent(a.id)}">
+          ${artHTML(a.coverArt, 80)}
+          <div class="tmeta"><div class="ttitle">${esc(a.name)}</div>
+          <div class="tsub muted">${a.albumCount || 0} albums</div></div>
+        </a>`).join('')}</div>`;
+    } else if (libTab === 'playlists') {
+      const pls = await api.playlists();
+      body.innerHTML = `<div class="grid">${pls.map((p) => `
+        <a class="card album" href="#/playlist/${encodeURIComponent(p.id)}">
+          ${artHTML(p.coverArt, 200)}
+          <div class="cname">${esc(p.name)}</div>
+          <div class="csub muted">${p.songCount || 0} songs</div>
+        </a>`).join('')}</div>`;
+    } else {
+      const s = await api.starred();
+      const songs = s.song || [];
+      body.innerHTML = songs.length
+        ? `<div class="tracklist">${songRowsHTML(songs)}</div>`
+        : '<div class="empty muted">No favourites yet.</div>';
+      wireSongRows(body, songs);
+    }
+  } catch (e) { body.innerHTML = `<div class="error">${esc(e.message)}</div>`; }
+}
+
+async function renderAlbum(id) {
+  loading();
+  const a = await api.album(id);
+  if (!a) return fail(new Error('Album not found'));
+  const songs = a.song || [];
+  view().innerHTML = `
+    <div class="detail-head">
+      ${artHTML(a.coverArt, 300)}
+      <div class="dh-meta">
+        <div class="dh-kind muted">ALBUM</div>
+        <h1>${esc(a.name)}</h1>
+        <div class="muted">${esc(a.artist || '')}${a.year ? ' • ' + a.year : ''} • ${songs.length} songs</div>
+        <div class="dh-actions">
+          <button id="play-all" class="primary">▶ Play</button>
+          <button id="shuffle-all" class="ghost">🔀 Shuffle</button>
+        </div>
       </div>
-      <div class="when">${relativeTime(s.playedAt)}</div>`;
-    row.querySelector('.title').textContent = s.title || 'Unknown';
-    row.querySelector('.sub').textContent =
-      [s.artist, s.album].filter(Boolean).join(' • ');
-    list.appendChild(row);
+    </div>
+    <div class="tracklist">${songRowsHTML(songs)}</div>`;
+  wireSongRows(view(), songs);
+  $('#play-all').addEventListener('click', () => player.play(songs, 0));
+  $('#shuffle-all').addEventListener('click', () => player.play(shuffle(songs), 0));
+}
+
+async function renderArtist(id) {
+  loading();
+  const a = await api.artist(id);
+  if (!a) return fail(new Error('Artist not found'));
+  const albums = a.album || [];
+  view().innerHTML = `
+    <div class="detail-head">
+      ${artHTML(a.coverArt, 300)}
+      <div class="dh-meta">
+        <div class="dh-kind muted">ARTIST</div>
+        <h1>${esc(a.name)}</h1>
+        <div class="muted">${albums.length} albums</div>
+      </div>
+    </div>
+    <div class="grid">${albumCardsHTML(albums)}</div>`;
+}
+
+async function renderPlaylist(id) {
+  loading();
+  const p = await api.playlist(id);
+  if (!p) return fail(new Error('Playlist not found'));
+  const songs = p.entry || [];
+  view().innerHTML = `
+    <div class="detail-head">
+      ${artHTML(p.coverArt, 300)}
+      <div class="dh-meta">
+        <div class="dh-kind muted">PLAYLIST</div>
+        <h1>${esc(p.name)}</h1>
+        <div class="muted">${songs.length} songs</div>
+        <div class="dh-actions">
+          <button id="play-all" class="primary">▶ Play</button>
+          <button id="shuffle-all" class="ghost">🔀 Shuffle</button>
+        </div>
+      </div>
+    </div>
+    <div class="tracklist">${songRowsHTML(songs)}</div>`;
+  wireSongRows(view(), songs);
+  $('#play-all').addEventListener('click', () => player.play(songs, 0));
+  $('#shuffle-all').addEventListener('click', () => player.play(shuffle(songs), 0));
+}
+
+function renderSearch() {
+  view().innerHTML = `
+    <div class="searchbar"><input id="q" type="search" placeholder="Search artists, albums, songs…" autofocus /></div>
+    <div id="results"></div>`;
+  let timer;
+  $('#q').addEventListener('input', (e) => {
+    clearTimeout(timer);
+    const q = e.target.value.trim();
+    timer = setTimeout(() => runSearch(q), 250);
+  });
+}
+
+async function runSearch(q) {
+  const out = $('#results');
+  if (!q) { out.innerHTML = ''; return; }
+  out.innerHTML = '<div class="loading">Searching…</div>';
+  try {
+    const r = await api.search(q);
+    const parts = [];
+    if ((r.artist || []).length) parts.push(shelfHTML('Artists', r.artist.map((a) => `
+      <a class="card album" href="#/artist/${encodeURIComponent(a.id)}">${artHTML(a.coverArt, 160)}
+      <div class="cname">${esc(a.name)}</div></a>`).join('')));
+    if ((r.album || []).length) parts.push(shelfHTML('Albums', albumCardsHTML(r.album)));
+    const songs = r.song || [];
+    if (songs.length) parts.push(`<section class="shelf"><h2>Songs</h2><div class="tracklist">${songRowsHTML(songs)}</div></section>`);
+    out.innerHTML = parts.length ? parts.join('') : '<div class="empty muted">No results.</div>';
+    if (songs.length) wireSongRows(out, songs);
+  } catch (e) { out.innerHTML = `<div class="error">${esc(e.message)}</div>`; }
+}
+
+async function renderAdmin() {
+  if (!isAdmin) { view().innerHTML = '<div class="empty muted">Admin access required.</div>'; return; }
+  loading();
+  const days = 365;
+  const [history, s] = await Promise.all([
+    api.recentlyPlayed(100).catch(() => []),
+    api.stats(days).catch(() => null),
+  ]);
+  const minutes = s ? Math.round((s.totalDurationSeconds || 0) / 60) : 0;
+  const link = navidromeUrl
+    ? `<a class="primary" href="${esc(navidromeUrl)}" target="_blank" rel="noopener">Manage users in Navidrome ↗</a>`
+    : `<span class="muted">Set <code>NAVIDROME_PUBLIC_URL</code> on the service to link here; manage users in Navidrome's own admin UI.</span>`;
+  view().innerHTML = `
+    <div class="admin-head"><h1>Admin</h1>${link}</div>
+    ${s ? `<div class="totals">
+      ${stat(s.totalPlays || 0, 'plays')}
+      ${stat(s.distinctSongs || 0, 'unique songs')}
+      ${stat(minutes.toLocaleString(), 'minutes')}
+    </div>
+    <div class="cols">
+      <div><h3>Top artists</h3><ol class="rank">${rank((s.topArtists || []).map((a) => [a.artist, a.plays]))}</ol></div>
+      <div><h3>Top songs</h3><ol class="rank">${rank((s.topSongs || []).map((t) => [`${t.title} — ${t.artist}`, t.plays]))}</ol></div>
+    </div>` : ''}
+    <h3>Recently played (all users on this server)</h3>
+    <div class="tracklist">${songRowsHTML(history)}</div>`;
+  wireSongRows(view(), history);
+}
+
+function stat(n, label) { return `<div class="stat"><div class="n">${n}</div><div class="l">${label}</div></div>`; }
+function rank(items) {
+  if (!items.length) return '<li class="muted">No data</li>';
+  return items.map(([label, c]) => `<li><span>${esc(label)}</span><span class="c">${c}</span></li>`).join('');
+}
+
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
   }
+  return a;
 }
 
-async function loadStats() {
-  const days = $('#stats-days').value;
-  const res = await fetch(`/api/stats?${authParams().toString()}&days=${days}`);
-  if (!res.ok) throw new Error(`stats failed (${res.status})`);
-  const s = await res.json();
+// --- routing ------------------------------------------------------------
 
-  const minutes = Math.round((s.totalDurationSeconds || 0) / 60);
-  $('#stats-totals').innerHTML = `
-    ${statCard(s.totalPlays || 0, 'plays')}
-    ${statCard(s.distinctSongs || 0, 'unique songs')}
-    ${statCard(minutes.toLocaleString(), 'minutes')}`;
-
-  renderRank($('#top-artists'), (s.topArtists || []).map((a) => [a.artist, a.plays]));
-  renderRank($('#top-songs'), (s.topSongs || []).map((t) => [`${t.title} — ${t.artist}`, t.plays]));
-  renderBars($('#by-day'), s.playsByDay || []);
-}
-
-function statCard(n, label) {
-  return `<div class="stat"><div class="n">${n}</div><div class="l">${label}</div></div>`;
-}
-
-function renderRank(ol, items) {
-  ol.innerHTML = '';
-  if (items.length === 0) {
-    ol.innerHTML = '<li class="muted">No data</li>';
-    return;
+function route() {
+  const hash = location.hash.replace(/^#\/?/, '') || 'home';
+  const [name, arg] = hash.split('/');
+  for (const b of document.querySelectorAll('.tabs button')) {
+    b.classList.toggle('active', b.dataset.route === name);
   }
-  for (const [label, count] of items) {
-    const li = document.createElement('li');
-    const span = document.createElement('span');
-    span.textContent = label;
-    li.appendChild(span);
-    li.insertAdjacentHTML('beforeend', ` <span class="c">${count}</span>`);
-    ol.appendChild(li);
-  }
+  const run = {
+    home: renderHome, library: renderLibrary, search: renderSearch, admin: renderAdmin,
+    album: () => renderAlbum(decodeURIComponent(arg)),
+    artist: () => renderArtist(decodeURIComponent(arg)),
+    playlist: () => renderPlaylist(decodeURIComponent(arg)),
+  }[name] || renderHome;
+  Promise.resolve(run()).catch(fail);
 }
 
-function renderBars(container, byDay) {
-  container.innerHTML = '';
-  const max = byDay.reduce((m, d) => Math.max(m, d.plays), 0) || 1;
-  for (const d of byDay) {
-    const bar = document.createElement('div');
-    bar.className = 'bar';
-    bar.style.height = `${(d.plays / max) * 100}%`;
-    bar.title = `${d.day}: ${d.plays} plays`;
-    container.appendChild(bar);
-  }
-}
+// --- auth / boot --------------------------------------------------------
 
-// --- wiring -------------------------------------------------------------
+async function enterApp() {
+  $('#login').classList.add('hidden');
+  $('#app').classList.remove('hidden');
+  $('#who').textContent = api.currentUsername();
+  player.init();
 
-function switchTab(name) {
-  for (const btn of document.querySelectorAll('.tabs button')) {
-    btn.classList.toggle('active', btn.dataset.tab === name);
-  }
-  $('#tab-history').classList.toggle('hidden', name !== 'history');
-  $('#tab-stats').classList.toggle('hidden', name !== 'stats');
-  const loader = name === 'history' ? loadHistory : loadStats;
-  loader().catch((e) => alert(e.message));
-}
+  // Admin gate + config link-out (best-effort; failures just hide admin).
+  try {
+    const [user, cfg] = await Promise.all([
+      api.getUser(api.currentUsername()), api.appConfig(),
+    ]);
+    isAdmin = user.adminRole === true || user.adminRole === 'true';
+    navidromeUrl = (cfg && cfg.navidromeUrl) || '';
+  } catch { isAdmin = false; }
+  $('#nav-admin').classList.toggle('hidden', !isAdmin);
 
-function enterApp() {
-  hide($('#login'));
-  show($('#app'));
-  $('#who').textContent = creds.username;
-  switchTab('history');
-}
-
-async function attemptLogin(c) {
-  saveCreds(c);
-  await subsonicGet('/rest/ping.view'); // throws if creds are wrong
+  if (!location.hash) location.hash = '#/home';
+  else route();
 }
 
 function initEvents() {
   $('#login-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const err = $('#login-error');
-    hide(err);
+    err.classList.add('hidden');
     try {
-      await attemptLogin({ username: $('#username').value, password: $('#password').value });
-      enterApp();
+      api.saveCreds({ username: $('#username').value, password: $('#password').value });
+      await api.ping();
+      await enterApp();
     } catch (ex) {
-      clearCreds();
+      api.clearCreds();
       err.textContent = ex.message;
-      show(err);
+      err.classList.remove('hidden');
     }
   });
-
-  $('#logout').addEventListener('click', () => {
-    clearCreds();
-    location.reload();
-  });
-
-  for (const btn of document.querySelectorAll('.tabs button')) {
-    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+  $('#logout').addEventListener('click', () => { api.clearCreds(); location.hash = ''; location.reload(); });
+  for (const b of document.querySelectorAll('.tabs button')) {
+    b.addEventListener('click', () => { location.hash = `#/${b.dataset.route}`; });
   }
-  $('#stats-days').addEventListener('change', () => loadStats().catch((e) => alert(e.message)));
+  window.addEventListener('hashchange', route);
 }
 
 async function boot() {
   initEvents();
-  creds = loadCreds();
-  if (creds) {
-    try {
-      await subsonicGet('/rest/ping.view');
-      enterApp();
-      return;
-    } catch {
-      clearCreds();
-    }
+  if (api.loadCreds()) {
+    try { await api.ping(); await enterApp(); return; } catch { api.clearCreds(); }
   }
-  show($('#login'));
+  $('#login').classList.remove('hidden');
 }
 
 boot();
