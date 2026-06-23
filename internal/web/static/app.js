@@ -72,34 +72,54 @@ function fail(e) { view().innerHTML = `<div class="error">${esc(e.message || e)}
 
 // --- views --------------------------------------------------------------
 
+function greeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+function quickTileHTML(a) {
+  return `<a class="tile" href="#/album/${encodeURIComponent(a.id)}">
+    ${a.coverArt ? `<img class="tile-art" loading="lazy" src="${api.coverArtURL(a.coverArt, 96)}" alt="" />` : '<div class="tile-art noart"></div>'}
+    <span class="tile-name">${esc(a.name)}</span>
+  </a>`;
+}
+
 async function renderHome() {
   loading();
-  const [onRep, forYou, recents, newest, frequent] = await Promise.all([
-    api.onRepeat(20).catch(() => []),
-    api.songsForYou(20).catch(() => []),
-    api.recentlyPlayed(30).catch(() => []),
-    api.albumList('newest', 20).catch(() => []),
+  const [frequent, recent, newest, random, forYou] = await Promise.all([
     api.albumList('frequent', 20).catch(() => []),
+    api.albumList('recent', 20).catch(() => []),
+    api.albumList('newest', 20).catch(() => []),
+    api.albumList('random', 10).catch(() => []),
+    api.songsForYou(20).catch(() => []),
   ]);
-  const sections = [];
-  if (onRep.length) sections.push(['On Repeat', songCardsHTML(onRep), onRep]);
-  if (forYou.length) sections.push(['Songs for you', songCardsHTML(forYou), forYou]);
-  if (recents.length) sections.push(['Recently played', songCardsHTML(recents), recents]);
-  if (newest.length) sections.push(['Recently added', albumCardsHTML(newest), null]);
-  if (frequent.length) sections.push(['Most played', albumCardsHTML(frequent), null]);
+  const recentIds = new Set(recent.map((a) => a.id));
+  const quick = (frequent.length ? frequent : recent).slice(0, 6);          // On Repeat tiles
+  const unplayed = newest.filter((a) => !(a.playCount > 0)).slice(0, 10);   // New in Your Library
+  const jumpBack = frequent.filter((a) => !recentIds.has(a.id)).slice(0, 10);
+  const forYouTop = forYou.slice(0, 10);
 
-  view().innerHTML = sections.length
-    ? sections.map(([t, html]) => shelfHTML(t, html)).join('')
-    : '<div class="empty muted">Nothing here yet — play some music.</div>';
+  const parts = [`<h1 class="page-title">${greeting()}</h1>`];
+  if (quick.length) {
+    parts.push(`<section class="onrepeat"><h2>On Repeat</h2>
+      <div class="tile-grid">${quick.map(quickTileHTML).join('')}</div></section>`);
+  }
+  if (unplayed.length) parts.push(shelfHTML('New in Your Library', albumCardsHTML(unplayed)));
+  if (jumpBack.length) parts.push(shelfHTML('Jump Back In', albumCardsHTML(jumpBack)));
+  if (random.length) parts.push(shelfHTML('Random Mix', albumCardsHTML(random)));
+  if (newest.length) parts.push(shelfHTML('Recently Added', albumCardsHTML(newest)));
+  if (forYouTop.length) {
+    parts.push(`<section class="shelf"><h2>Songs for You</h2>
+      <div class="song-list">${songRowsHTML(forYouTop)}</div></section>`);
+  }
+  view().innerHTML = parts.length > 1
+    ? parts.join('')
+    : `<h1 class="page-title">${greeting()}</h1><div class="empty muted">Nothing here yet — play some music.</div>`;
 
-  // Wire song shelves (album shelves are links).
-  view().querySelectorAll('.shelf').forEach((sec, i) => {
-    const songs = sections[i][2];
-    if (!songs) return;
-    sec.querySelectorAll('.song').forEach((card) => {
-      card.addEventListener('click', () => player.play(songs, Number(card.dataset.idx)));
-    });
-  });
+  const sl = view().querySelector('.song-list');
+  if (sl) wireSongRows(sl, forYouTop);
 }
 
 const LIB_TABS = [['albums', 'Albums'], ['artists', 'Artists']];
