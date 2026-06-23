@@ -123,7 +123,7 @@ func teeProxy(t *testing.T, upstreamURL string) (http.Handler, *store.Store) {
 	}
 	t.Cleanup(func() { _ = st.Close() })
 	u, _ := url.Parse(upstreamURL)
-	return New(u, st, slog.New(slog.NewTextHandler(io.Discard, nil))), st
+	return New(u, st, "", slog.New(slog.NewTextHandler(io.Discard, nil))), st
 }
 
 // waitForPlays polls until the async recorder has written n plays, or fails.

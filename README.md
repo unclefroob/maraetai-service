@@ -29,9 +29,13 @@ upstream edits/deletes. Recording is async and never blocks playback.
   random for a new listener.
 - **Fast artist play** — `getArtistSongs`: a whole discography in one client
   round-trip; the proxy does the per-album fan-out server-side, concurrently.
-- **Listening stats + web app** — `GET /api/stats` (totals, top artists/songs,
-  plays-by-day) and an embedded single-page app at **`/app/`** (history +
-  Wrapped-style stats), served from the same binary.
+- **Web player + admin** — an embedded single-page app at **`/app/`** (served
+  from the same binary, signs in with Navidrome creds): a player with mobile-app
+  parity (browse albums/artists/playlists/favourites, search, HTML5 playback with
+  a queue + now-playing bar, star/unstar — web plays scrobble through the proxy,
+  so they land in the play store too) plus an **admin** section (shown to admins)
+  with listening stats (`GET /api/stats`), recent-play history, and a link out to
+  Navidrome's own UI for user management (set `NAVIDROME_PUBLIC_URL` to enable it).
 
 **Backwards compatible by design.** Everything standard is forwarded to
 Navidrome untouched, so a plain Subsonic client works through the proxy exactly
@@ -72,6 +76,7 @@ endpoint we don't explicitly handle are never on a special code path.
 | `NAVIDROME_URL`  | yes      | —                  | Upstream Navidrome base URL    |
 | `LISTEN_ADDR`    | no       | `:4534`            | Address the proxy listens on   |
 | `DB_PATH`        | no       | `./data/maraetai.db` | SQLite play-history database  |
+| `NAVIDROME_PUBLIC_URL` | no | —                 | Browser-reachable Navidrome URL; enables the web app's admin "manage users" link-out |
 
 ## Run locally
 
