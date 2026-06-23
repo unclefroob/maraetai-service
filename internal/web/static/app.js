@@ -82,48 +82,165 @@ function greeting() {
   return 'Good evening';
 }
 
-function quickTileHTML(a) {
-  return `<a class="tile" href="#/album/${encodeURIComponent(a.id)}">
-    ${a.coverArt ? `<img class="tile-art" loading="lazy" src="${api.coverArtURL(a.coverArt, 96)}" alt="" />` : '<div class="tile-art noart"></div>'}
-    <span class="tile-name">${esc(a.name)}</span>
-  </a>`;
+// --- Home hero gradient (dominant colour sampled from the cover) ------------
+
+let heroTimer = null;
+const gradCache = {};
+
+function clearHero() { if (heroTimer) { clearInterval(heroTimer); heroTimer = null; } }
+
+function setHeroGradient(el, coverArt) {
+  if (!coverArt) { el.style.background = 'linear-gradient(160deg, #2a2a2a, #0a0a0a)'; return; }
+  if (gradCache[coverArt]) { el.style.background = gradCache[coverArt]; return; }
+  const img = new Image();
+  img.onload = () => {
+    try {
+      const c = document.createElement('canvas');
+      c.width = c.height = 16;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0, 16, 16);
+      const d = ctx.getImageData(0, 0, 16, 16).data;
+      let r = 0, g = 0, b = 0, n = 0;
+      for (let p = 0; p < d.length; p += 4) { r += d[p]; g += d[p + 1]; b += d[p + 2]; n++; }
+      const dk = (v, amt) => Math.round((v / n) * (1 - amt)); // average, mixed toward black
+      const grad = `linear-gradient(160deg, rgb(${dk(r, .42)},${dk(g, .42)},${dk(b, .42)}), rgb(${dk(r, .78)},${dk(g, .78)},${dk(b, .78)}))`;
+      gradCache[coverArt] = grad;
+      el.style.background = grad;
+    } catch { el.style.background = 'linear-gradient(160deg, #2a2a2a, #0a0a0a)'; }
+  };
+  img.src = api.coverArtURL(coverArt, 160); // same-origin → canvas readable
+}
+
+const heroShell = `
+  <section class="hero" id="hero">
+    <div class="hero-main">
+      <div class="hero-text">
+        <div class="hero-kicker">ON REPEAT</div>
+        <div class="hero-title" id="hero-title"></div>
+        <div class="hero-sub" id="hero-sub"></div>
+        <div class="hero-note" id="hero-note">The songs you keep coming back to</div>
+      </div>
+      <img class="hero-art" id="hero-art" alt="" />
+    </div>
+    <div class="hero-actions">
+      <button class="hero-pill play" id="hero-play">▶ Play</button>
+      <button class="hero-pill" id="hero-shuffle">Shuffle</button>
+    </div>
+  </section>`;
+
+// Song-level On Repeat hero (maraetai getOnRepeat): rotates the spotlight through
+// the list; Play starts from the spotlighted song. Tap opens the full list.
+function renderSongHero(songs) {
+  const slot = $('#hero-slot');
+  if (!slot) return;
+  slot.innerHTML = heroShell;
+  const hero = $('#hero'), titleEl = $('#hero-title'), subEl = $('#hero-sub'), artEl = $('#hero-art');
+  let i = 0;
+  const show = () => {
+    if (!document.body.contains(hero)) { clearHero(); return; }
+    const s = songs[i];
+    titleEl.textContent = s.title || 'On Repeat';
+    subEl.textContent = s.artist || '';
+    artEl.src = s.coverArt ? api.coverArtURL(s.coverArt, 160) : '';
+    setHeroGradient(hero, s.coverArt);
+  };
+  show();
+  hero.addEventListener('click', (e) => { if (!e.target.closest('.hero-pill')) location.hash = '#/onrepeat'; });
+  $('#hero-play').addEventListener('click', (e) => { e.stopPropagation(); player.play(songs, i); });
+  $('#hero-shuffle').addEventListener('click', (e) => { e.stopPropagation(); player.play(shuffle(songs), 0); });
+  clearHero();
+  if (songs.length > 1) heroTimer = setInterval(() => { i = (i + 1) % songs.length; show(); }, 6000);
+}
+
+// Fallback when there's no replay history yet: spotlight the top frequent album.
+function renderAlbumHero(a) {
+  const slot = $('#hero-slot');
+  if (!slot) return;
+  slot.innerHTML = heroShell;
+  const stat = a.playCount ? `Played ${a.playCount} times` : (a.year ? String(a.year) : `${a.songCount || 0} songs`);
+  $('#hero-title').textContent = a.name;
+  $('#hero-sub').textContent = a.artist || '';
+  $('#hero-note').textContent = stat;
+  $('#hero-art').src = a.coverArt ? api.coverArtURL(a.coverArt, 160) : '';
+  setHeroGradient($('#hero'), a.coverArt);
+  $('#hero').addEventListener('click', (e) => { if (!e.target.closest('.hero-pill')) location.hash = `#/album/${encodeURIComponent(a.id)}`; });
+  const playAlbum = async (sh) => { const al = await api.album(a.id); if (al && al.song) player.play(sh ? shuffle(al.song) : al.song, 0); };
+  $('#hero-play').addEventListener('click', (e) => { e.stopPropagation(); playAlbum(false); });
+  $('#hero-shuffle').addEventListener('click', (e) => { e.stopPropagation(); playAlbum(true); });
+}
+
+// Songs for You as one "Daily Mix" tile (maraetai getSongsForYou).
+function renderDailyMix(tracks) {
+  const slot = $('#mix-slot');
+  if (!slot) return;
+  const ids = [...new Set(tracks.map((t) => t.coverArt).filter(Boolean))].slice(0, 4);
+  const collage = ids.length >= 4
+    ? `<div class="mix-collage">${ids.map((id) => `<img src="${api.coverArtURL(id, 96)}" alt="" />`).join('')}</div>`
+    : `<div class="mix-collage one">${ids[0] ? `<img src="${api.coverArtURL(ids[0], 160)}" alt="" />` : ''}</div>`;
+  slot.innerHTML = `
+    <section class="mix-tile">
+      <a class="mix-info" href="#/songsforyou">
+        ${collage}
+        <div>
+          <div class="mix-kicker">SONGS FOR YOU</div>
+          <div class="mix-title">Updated daily</div>
+          <div class="mix-sub muted">${tracks.length} hand-picked tracks</div>
+        </div>
+      </a>
+      <button class="mix-play" id="mix-play" title="Play">▶</button>
+    </section>`;
+  $('#mix-play').addEventListener('click', () => player.play(tracks, 0));
 }
 
 async function renderHome() {
   loading();
-  const [frequent, recent, newest, random, forYou] = await Promise.all([
+  const [onRep, forYou, frequent, recent, newest, random] = await Promise.all([
+    api.onRepeat(30).catch(() => []),
+    api.songsForYou(24).catch(() => []),
     api.albumList('frequent', 20).catch(() => []),
     api.albumList('recent', 20).catch(() => []),
     api.albumList('newest', 20).catch(() => []),
     api.albumList('random', 10).catch(() => []),
-    api.songsForYou(20).catch(() => []),
   ]);
   const recentIds = new Set(recent.map((a) => a.id));
-  const quick = (frequent.length ? frequent : recent).slice(0, 6);          // On Repeat tiles
-  const unplayed = newest.filter((a) => !(a.playCount > 0)).slice(0, 10);   // New in Your Library
+  const unplayed = newest.filter((a) => !(a.playCount > 0)).slice(0, 10);   // New in your library
   const jumpBack = frequent.filter((a) => !recentIds.has(a.id)).slice(0, 10);
-  const forYouTop = forYou.slice(0, 10);
 
-  const parts = [`<h1 class="page-title">${greeting()}</h1>`];
-  if (quick.length) {
-    parts.push(`<section class="onrepeat"><h2>On Repeat</h2>
-      <div class="tile-grid">${quick.map(quickTileHTML).join('')}</div></section>`);
-  }
-  if (unplayed.length) parts.push(shelfHTML('New in Your Library', albumCardsHTML(unplayed)));
-  if (jumpBack.length) parts.push(shelfHTML('Jump Back In', albumCardsHTML(jumpBack)));
-  if (random.length) parts.push(shelfHTML('Random Mix', albumCardsHTML(random)));
+  const parts = [`<h1 class="page-title">${greeting()}</h1>`, '<div id="hero-slot"></div>'];
+  if (forYou.length) parts.push('<div id="mix-slot"></div>');
+  if (unplayed.length) parts.push(shelfHTML('New in your library', albumCardsHTML(unplayed)));
+  if (jumpBack.length) parts.push(shelfHTML('Jump back in', albumCardsHTML(jumpBack)));
+  if (random.length) parts.push(shelfHTML('Random mix', albumCardsHTML(random)));
   if (newest.length) parts.push(shelfHTML('Recently Added', albumCardsHTML(newest)));
-  if (forYouTop.length) {
-    parts.push(`<section class="shelf"><h2>Songs for You</h2>
-      <div class="song-list">${songRowsHTML(forYouTop)}</div></section>`);
-  }
-  view().innerHTML = parts.length > 1
-    ? parts.join('')
-    : `<h1 class="page-title">${greeting()}</h1><div class="empty muted">Nothing here yet — play some music.</div>`;
+  view().innerHTML = parts.join('');
 
-  const sl = view().querySelector('.song-list');
-  if (sl) wireSongRows(sl, forYouTop);
+  // On Repeat: song hero on maraetai (with replay history), else album fallback.
+  if (onRep.length) renderSongHero(onRep);
+  else if (frequent.length) renderAlbumHero(frequent[0]);
+  if (forYou.length) renderDailyMix(forYou);
 }
+
+// Full lists behind the hero / mix tile.
+async function renderSongCollection(title, fetcher, note) {
+  loading();
+  const songs = await fetcher();
+  view().innerHTML = `<h1 class="page-title">${esc(title)}</h1>`
+    + (note ? `<p class="bio muted">${esc(note)}</p>` : '')
+    + (songs.length ? `
+      <div class="dh-actions list-actions">
+        <button id="col-play" class="primary">▶ Play</button>
+        <button id="col-shuffle" class="ghost">Shuffle</button>
+      </div>
+      <div class="tracklist">${songRowsHTML(songs)}</div>`
+      : '<div class="empty muted">Nothing here yet.</div>');
+  wireSongRows(view(), songs);
+  if (songs.length) {
+    $('#col-play').addEventListener('click', () => player.play(songs, 0));
+    $('#col-shuffle').addEventListener('click', () => player.play(shuffle(songs), 0));
+  }
+}
+const renderOnRepeat = () => renderSongCollection('On Repeat', () => api.onRepeat(100), 'The songs you keep coming back to.');
+const renderSongsForYou = () => renderSongCollection('Songs for You', () => api.songsForYou(50), 'A fresh mix, updated daily.');
 
 const LIB_TABS = [['albums', 'Albums'], ['artists', 'Artists'], ['genres', 'Genres']];
 let libTab = 'albums';
@@ -213,7 +330,7 @@ async function renderMyMusic() {
     body.innerHTML = `
       <div class="dh-actions list-actions">
         <button id="mm-play" class="primary">▶ Play</button>
-        <button id="mm-shuffle" class="ghost">🔀 Shuffle</button>
+        <button id="mm-shuffle" class="ghost">Shuffle</button>
       </div>
       <div class="tracklist">${songRowsHTML(songs)}</div>`;
     wireSongRows(body, songs);
@@ -259,7 +376,7 @@ async function renderAlbum(id) {
         <div class="muted">${esc(a.artist || '')}${a.year ? ' • ' + a.year : ''} • ${songs.length} songs</div>
         <div class="dh-actions">
           <button id="play-all" class="primary">▶ Play</button>
-          <button id="shuffle-all" class="ghost">🔀 Shuffle</button>
+          <button id="shuffle-all" class="ghost">Shuffle</button>
           <button id="album-love" class="ghost love ${a.starred ? 'on' : ''}">${a.starred ? '♥' : '♡'} Love</button>
         </div>
       </div>
@@ -337,7 +454,7 @@ async function renderPlaylist(id) {
         <div class="muted">${songs.length} songs</div>
         <div class="dh-actions">
           <button id="play-all" class="primary">▶ Play</button>
-          <button id="shuffle-all" class="ghost">🔀 Shuffle</button>
+          <button id="shuffle-all" class="ghost">Shuffle</button>
         </div>
       </div>
     </div>
@@ -423,6 +540,7 @@ function shuffle(arr) {
 // --- routing ------------------------------------------------------------
 
 function route() {
+  clearHero(); // stop the Home hero rotation when leaving Home
   const hash = location.hash.replace(/^#\/?/, '') || 'home';
   const [name, arg] = hash.split('/');
   for (const b of document.querySelectorAll('[data-route]')) {
@@ -431,6 +549,7 @@ function route() {
   const run = {
     home: renderHome, library: renderLibrary, search: renderSearch,
     mymusic: renderMyMusic, playlists: renderPlaylists, admin: renderAdmin,
+    onrepeat: renderOnRepeat, songsforyou: renderSongsForYou,
     album: () => renderAlbum(decodeURIComponent(arg)),
     artist: () => renderArtist(decodeURIComponent(arg)),
     playlist: () => renderPlaylist(decodeURIComponent(arg)),
