@@ -68,6 +68,29 @@ export function play(tracks, startAt = 0) {
   loadCurrent();
 }
 
+// enqueue appends one track (or a list) to the end of the queue. If nothing is
+// playing yet, it starts playback from the first appended track instead.
+export function enqueue(tracks) {
+  const list = Array.isArray(tracks) ? tracks : [tracks];
+  if (!list.length) return;
+  if (index < 0 || queue.length === 0) { play(list, 0); return; }
+  baseQueue.push(...list);
+  queue.push(...list);
+  renderQueue();
+}
+
+// playNext inserts one track (or a list) immediately after the current track.
+export function playNext(tracks) {
+  const list = Array.isArray(tracks) ? tracks : [tracks];
+  if (!list.length) return;
+  if (index < 0 || queue.length === 0) { play(list, 0); return; }
+  queue.splice(index + 1, 0, ...list);
+  const cur = current();
+  const bi = baseQueue.indexOf(cur);
+  baseQueue.splice(bi < 0 ? baseQueue.length : bi + 1, 0, ...list);
+  renderQueue();
+}
+
 function loadCurrent() {
   const track = current();
   if (!track) return;

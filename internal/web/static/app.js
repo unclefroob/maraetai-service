@@ -14,6 +14,7 @@ let navidromeUrl = '';
 // Monochrome button glyphs (respect currentColor) — no coloured emoji.
 const SVG_PLAY = '<svg class="bi" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>';
 const SVG_SHUFFLE = '<svg class="bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>';
+const SVG_MORE = '<svg class="bi" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>';
 
 // --- shared render helpers ---------------------------------------------
 
@@ -26,14 +27,105 @@ function songRowsHTML(songs) {
         <div class="tsub muted">${esc([s.artist, s.album].filter(Boolean).join(' • '))}</div>
       </div>
       <span class="tdur muted">${fmtDur(s.duration)}</span>
+      <div class="trow-actions">
+        <button class="trow-star ${s.starred ? 'on' : ''}" data-star="${i}" title="Favourite">${s.starred ? '♥' : '♡'}</button>
+        <button class="trow-more" data-more="${i}" title="More actions">${SVG_MORE}</button>
+      </div>
     </div>`).join('');
 }
 
-// Wire a rendered track list so a row plays the whole list from that point.
+// Wire a rendered track list: a row plays the whole list from that point, the
+// heart favourites the song, and the ⋯ button opens a per-song action menu.
 function wireSongRows(container, songs) {
   container.querySelectorAll('.trow').forEach((row) => {
-    row.addEventListener('click', () => player.play(songs, Number(row.dataset.idx)));
+    const i = Number(row.dataset.idx);
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('.trow-actions')) return; // let the action buttons handle their own clicks
+      player.play(songs, i);
+    });
+    const star = row.querySelector('.trow-star');
+    star.addEventListener('click', (e) => { e.stopPropagation(); toggleRowStar(star, songs[i]); });
+    row.querySelector('.trow-more').addEventListener('click', (e) => {
+      e.stopPropagation();
+      openMenu(e.currentTarget, songMenu(songs[i]));
+    });
   });
+}
+
+// Optimistic favourite toggle for a single track row.
+async function toggleRowStar(btn, song) {
+  const on = btn.classList.contains('on');
+  btn.classList.toggle('on', !on);
+  btn.textContent = on ? '♡' : '♥';
+  try {
+    await (on ? api.unstar(song.id) : api.star(song.id));
+    song.starred = on ? undefined : new Date().toISOString();
+  } catch {
+    btn.classList.toggle('on', on);
+    btn.textContent = on ? '♥' : '♡';
+  }
+}
+
+// Per-song action menu (Play Next / Add to Queue / Go to Album / Go to Artist).
+// Add-to-Playlist arrives with the read/write-playlists feature.
+function songMenu(song) {
+  const items = [
+    { label: 'Play Next', action: () => { player.playNext(song); toast('Playing next'); } },
+    { label: 'Add to Queue', action: () => { player.enqueue(song); toast('Added to queue'); } },
+  ];
+  if (song.albumId) items.push({ label: 'Go to Album', action: () => { location.hash = `#/album/${encodeURIComponent(song.albumId)}`; } });
+  if (song.artistId) items.push({ label: 'Go to Artist', action: () => { location.hash = `#/artist/${encodeURIComponent(song.artistId)}`; } });
+  return items;
+}
+
+// --- floating context menu ---------------------------------------------
+
+let ctxMenu = null;
+function onMenuOutside(e) { if (ctxMenu && !ctxMenu.contains(e.target)) closeMenu(); }
+function closeMenu() {
+  if (!ctxMenu) return;
+  ctxMenu.remove();
+  ctxMenu = null;
+  document.removeEventListener('click', onMenuOutside, true);
+  window.removeEventListener('resize', closeMenu);
+  window.removeEventListener('hashchange', closeMenu);
+}
+
+function openMenu(anchor, items) {
+  closeMenu();
+  if (!items.length) return;
+  ctxMenu = document.createElement('div');
+  ctxMenu.className = 'ctx-menu';
+  ctxMenu.innerHTML = items.map((it, i) => `<button class="ctx-item" data-ci="${i}">${esc(it.label)}</button>`).join('');
+  document.body.appendChild(ctxMenu);
+  const r = anchor.getBoundingClientRect();
+  const left = Math.max(8, r.right - ctxMenu.offsetWidth);
+  let top = r.bottom + 4;
+  if (top + ctxMenu.offsetHeight > window.innerHeight - 8) top = Math.max(8, r.top - ctxMenu.offsetHeight - 4);
+  ctxMenu.style.left = `${left}px`;
+  ctxMenu.style.top = `${top}px`;
+  ctxMenu.querySelectorAll('.ctx-item').forEach((b) => {
+    b.addEventListener('click', (e) => { e.stopPropagation(); const it = items[Number(b.dataset.ci)]; closeMenu(); it.action(); });
+  });
+  // Close on the next outside interaction (capture beats other handlers; deferred
+  // so the click that opened the menu doesn't immediately close it).
+  setTimeout(() => {
+    document.addEventListener('click', onMenuOutside, true);
+    window.addEventListener('resize', closeMenu);
+    window.addEventListener('hashchange', closeMenu);
+  }, 0);
+}
+
+// --- transient toast ----------------------------------------------------
+
+let toastTimer = null;
+function toast(msg) {
+  let el = $('#toast');
+  if (!el) { el = document.createElement('div'); el.id = 'toast'; el.className = 'toast'; document.body.appendChild(el); }
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 1800);
 }
 
 function songCardsHTML(songs) {
