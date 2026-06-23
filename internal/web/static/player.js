@@ -5,6 +5,22 @@ import * as api from './api.js';
 
 const $ = (sel) => document.querySelector(sel);
 
+// Monochrome inline SVGs (respect currentColor) so controls match the macOS
+// app's SF Symbols instead of rendering as coloured emoji.
+const S = 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
+const ICONS = {
+  shuffle: `<svg viewBox="0 0 24 24" ${S}><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>`,
+  prev: `<svg viewBox="0 0 24 24" ${S}><polygon points="19 20 9 12 19 4 19 20" fill="currentColor"/><line x1="5" y1="19" x2="5" y2="5"/></svg>`,
+  next: `<svg viewBox="0 0 24 24" ${S}><polygon points="5 4 15 12 5 20 5 4" fill="currentColor"/><line x1="19" y1="5" x2="19" y2="19"/></svg>`,
+  play: `<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>`,
+  pause: `<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>`,
+  repeat: `<svg viewBox="0 0 24 24" ${S}><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>`,
+  repeatOne: `<svg viewBox="0 0 24 24" ${S}><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/><text x="12" y="15.5" font-size="9" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none">1</text></svg>`,
+  lyrics: `<svg viewBox="0 0 24 24" ${S}><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`,
+  queue: `<svg viewBox="0 0 24 24" ${S}><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>`,
+  volume: `<svg viewBox="0 0 24 24" ${S}><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>`,
+};
+
 let baseQueue = []; // canonical order as queued
 let queue = [];     // active play order (== baseQueue unless shuffled)
 let index = -1;
@@ -107,7 +123,7 @@ function toggleShuffle() {
 
 function cycleRepeat() {
   repeatMode = repeatMode === 'off' ? 'all' : repeatMode === 'all' ? 'one' : 'off';
-  repeatBtn.textContent = repeatMode === 'one' ? '🔂' : '🔁';
+  repeatBtn.innerHTML = repeatMode === 'one' ? ICONS.repeatOne : ICONS.repeat;
   repeatBtn.classList.toggle('on', repeatMode !== 'off');
 }
 
@@ -243,6 +259,16 @@ export function init() {
   queuePanel = $('#queue-panel'); qpList = $('#qp-list');
   lyricsModal = $('#lyrics-modal'); lyBody = $('#ly-body'); lyTitle = $('#ly-title');
 
+  // Paint the monochrome SVG icons (replaces the emoji fallbacks in the markup).
+  shuffleBtn.innerHTML = ICONS.shuffle;
+  $('#np-prev').innerHTML = ICONS.prev;
+  playBtn.innerHTML = ICONS.play;
+  $('#np-next').innerHTML = ICONS.next;
+  repeatBtn.innerHTML = ICONS.repeat;
+  lyricsBtn.innerHTML = ICONS.lyrics;
+  queueBtn.innerHTML = ICONS.queue;
+  $('#np-vol-ic').innerHTML = ICONS.volume;
+
   playBtn.addEventListener('click', togglePlay);
   $('#np-prev').addEventListener('click', prev);
   $('#np-next').addEventListener('click', next);
@@ -254,8 +280,8 @@ export function init() {
   $('#qp-clear').addEventListener('click', () => { baseQueue = []; queue = []; index = -1; audio.pause(); renderQueue(); });
   $('#ly-close').addEventListener('click', toggleLyrics);
 
-  audio.addEventListener('play', () => { playBtn.textContent = '⏸'; });
-  audio.addEventListener('pause', () => { playBtn.textContent = '▶'; });
+  audio.addEventListener('play', () => { playBtn.innerHTML = ICONS.pause; });
+  audio.addEventListener('pause', () => { playBtn.innerHTML = ICONS.play; });
   audio.addEventListener('ended', onEnded);
   audio.addEventListener('timeupdate', onTimeUpdate);
 

@@ -89,10 +89,12 @@ button { font: inherit; cursor: pointer; }
 .shelf { margin-bottom: 28px; }
 .shelf h2 { margin: 0 0 12px; font-size: 18px; }
 .scroller { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: thin; }
-.scroller .card { flex: 0 0 150px; }
+.scroller .card { flex: 0 0 150px; min-width: 0; }
+/* Pin shelf art to a fixed square so a high-res cover can't blow out the row. */
+.scroller .card .art-wrap, .scroller .card .art { width: 150px; height: 150px; aspect-ratio: auto; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 16px; }
 .card {
-  display: block; background: transparent; border: 0; color: inherit; text-align: left; padding: 0;
+  display: block; background: transparent; border: 0; color: inherit; text-align: left; padding: 0; min-width: 0;
 }
 .card .art { width: 100%; aspect-ratio: 1; border-radius: var(--radius-sm); object-fit: cover; display: block; }
 .card.song .art { border-radius: var(--radius-sm); }
@@ -195,8 +197,10 @@ code { background: var(--surface2); padding: 2px 6px; border-radius: 5px; }
 .np-artist { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .np-center { display: grid; gap: 6px; justify-items: center; }
 .np-controls { display: flex; align-items: center; gap: 18px; }
-.icon { background: transparent; border: 0; color: var(--text); font-size: 18px; line-height: 1; }
-.icon.play { font-size: 26px; }
+.icon { background: transparent; border: 0; color: var(--text); line-height: 0; display: inline-flex; align-items: center; justify-content: center; padding: 4px; cursor: pointer; }
+.icon svg { width: 18px; height: 18px; display: block; }
+.icon.play { color: var(--text); }
+.icon.play svg { width: 30px; height: 30px; }
 .icon.star.on { color: var(--accent); }
 .np-seek { display: flex; align-items: center; gap: 10px; width: min(520px, 60vw); }
 .time { font-size: 12px; color: var(--muted); width: 38px; text-align: center; }
@@ -204,9 +208,12 @@ code { background: var(--surface2); padding: 2px 6px; border-radius: 5px; }
 input[type=range] { -webkit-appearance: none; appearance: none; height: 4px; background: var(--line); border-radius: 999px; flex: 1; }
 input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%; background: var(--text); }
 #np-vol { width: 90px; flex: none; }
-.icon.small { font-size: 15px; opacity: .75; }
+.icon.small { opacity: .8; }
+.icon.small svg { width: 16px; height: 16px; }
 .icon.small:hover { opacity: 1; }
 .icon.on { color: var(--accent); opacity: 1; }
+/* Heart glyphs (favourite) stay as text, so keep them sized/centred. */
+.icon.star { font-size: 18px; line-height: 1; }
 
 /* Queue panel (floats above the player bar) */
 .queue-panel {
