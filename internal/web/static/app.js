@@ -45,7 +45,10 @@ function songCardsHTML(songs) {
 function albumCardsHTML(albums) {
   return albums.map((a) => `
     <a class="card album" href="#/album/${encodeURIComponent(a.id)}">
-      ${artHTML(a.coverArt, 200)}
+      <div class="art-wrap">
+        ${artHTML(a.coverArt, 200)}
+        <button class="card-play" data-play-album="${esc(a.id)}" title="Play">▶</button>
+      </div>
       <div class="cname">${esc(a.name)}</div>
       <div class="csub muted">${esc(a.artist || '')}</div>
     </a>`).join('');
@@ -122,7 +125,7 @@ async function renderHome() {
   if (sl) wireSongRows(sl, forYouTop);
 }
 
-const LIB_TABS = [['albums', 'Albums'], ['artists', 'Artists']];
+const LIB_TABS = [['albums', 'Albums'], ['artists', 'Artists'], ['genres', 'Genres']];
 let libTab = 'albums';
 
 async function renderLibrary() {
@@ -139,7 +142,7 @@ async function renderLibrary() {
     if (libTab === 'albums') {
       const albums = await api.albumList('alphabeticalByName', 100);
       body.innerHTML = `<div class="grid">${albumCardsHTML(albums)}</div>`;
-    } else {
+    } else if (libTab === 'artists') {
       const artists = await api.artistsIndex();
       body.innerHTML = `<div class="list">${artists.map((a) => `
         <a class="lrow" href="#/artist/${encodeURIComponent(a.id)}">
@@ -147,6 +150,44 @@ async function renderLibrary() {
           <div class="tmeta"><div class="ttitle">${esc(a.name)}</div>
           <div class="tsub muted">${a.albumCount || 0} albums</div></div>
         </a>`).join('')}</div>`;
+    } else {
+      const gs = await api.genres();
+      gs.sort((a, b) => (b.albumCount || 0) - (a.albumCount || 0));
+      body.innerHTML = gs.length
+        ? `<div class="list">${gs.map((g) => `
+            <a class="lrow genre" href="#/genre/${encodeURIComponent(g.value)}">
+              <div class="genre-ic">♫</div>
+              <div class="tmeta"><div class="ttitle">${esc(g.value)}</div>
+              <div class="tsub muted">${g.songCount || 0} songs · ${g.albumCount || 0} albums</div></div>
+            </a>`).join('')}</div>`
+        : '<div class="empty muted">No genres.</div>';
+    }
+  } catch (e) { body.innerHTML = `<div class="error">${esc(e.message)}</div>`; }
+}
+
+let genreTab = 'albums';
+async function renderGenre(name) {
+  view().innerHTML = `
+    <h1 class="page-title">${esc(name)}</h1>
+    <div class="subtabs">
+      <button data-gt="albums" class="${genreTab === 'albums' ? 'active' : ''}">Albums</button>
+      <button data-gt="songs" class="${genreTab === 'songs' ? 'active' : ''}">Songs</button>
+    </div>
+    <div id="genre-body"></div>`;
+  view().querySelectorAll('[data-gt]').forEach((b) =>
+    b.addEventListener('click', () => { genreTab = b.dataset.gt; renderGenre(name); }));
+  const body = $('#genre-body');
+  body.innerHTML = '<div class="loading">Loading…</div>';
+  try {
+    if (genreTab === 'albums') {
+      const albums = await api.albumsByGenre(name);
+      body.innerHTML = albums.length ? `<div class="grid">${albumCardsHTML(albums)}</div>`
+        : '<div class="empty muted">No albums.</div>';
+    } else {
+      const songs = await api.songsByGenre(name);
+      body.innerHTML = songs.length ? `<div class="tracklist">${songRowsHTML(songs)}</div>`
+        : '<div class="empty muted">No songs.</div>';
+      wireSongRows(body, songs);
     }
   } catch (e) { body.innerHTML = `<div class="error">${esc(e.message)}</div>`; }
 }
@@ -219,6 +260,7 @@ async function renderAlbum(id) {
         <div class="dh-actions">
           <button id="play-all" class="primary">▶ Play</button>
           <button id="shuffle-all" class="ghost">🔀 Shuffle</button>
+          <button id="album-love" class="ghost love ${a.starred ? 'on' : ''}">${a.starred ? '♥' : '♡'} Love</button>
         </div>
       </div>
     </div>
@@ -226,6 +268,20 @@ async function renderAlbum(id) {
   wireSongRows(view(), songs);
   $('#play-all').addEventListener('click', () => player.play(songs, 0));
   $('#shuffle-all').addEventListener('click', () => player.play(shuffle(songs), 0));
+  wireLove($('#album-love'), id, !!a.starred);
+}
+
+// A Love toggle button: optimistic star/unstar of an item by id.
+function wireLove(btn, id, starred) {
+  if (!btn) return;
+  let on = starred;
+  btn.addEventListener('click', async () => {
+    on = !on;
+    btn.classList.toggle('on', on);
+    btn.textContent = (on ? '♥' : '♡') + ' Love';
+    try { await (on ? api.star(id) : api.unstar(id)); }
+    catch { on = !on; btn.classList.toggle('on', on); btn.textContent = (on ? '♥' : '♡') + ' Love'; }
+  });
 }
 
 async function renderArtist(id) {
@@ -233,16 +289,38 @@ async function renderArtist(id) {
   const a = await api.artist(id);
   if (!a) return fail(new Error('Artist not found'));
   const albums = a.album || [];
-  view().innerHTML = `
+  const [info, popular] = await Promise.all([
+    api.artistInfo(id),
+    api.topSongs(a.name, 10),
+  ]);
+  const bio = info && info.biography ? info.biography.replace(/<[^>]*>/g, '').trim() : '';
+  const similar = (info && info.similarArtist) || [];
+
+  const parts = [`
     <div class="detail-head">
       ${artHTML(a.coverArt, 300)}
       <div class="dh-meta">
         <div class="dh-kind muted">ARTIST</div>
         <h1>${esc(a.name)}</h1>
         <div class="muted">${albums.length} albums</div>
+        <div class="dh-actions"><button id="play-pop" class="primary">▶ Play</button></div>
       </div>
-    </div>
-    <div class="grid">${albumCardsHTML(albums)}</div>`;
+    </div>`];
+  if (bio) parts.push(`<p class="bio muted">${esc(bio)}</p>`);
+  if (popular.length) parts.push(`<section class="shelf"><h2>Popular</h2><div class="tracklist" id="pop-list">${songRowsHTML(popular)}</div></section>`);
+  if (albums.length) parts.push(shelfHTML('Albums', albumCardsHTML(albums)));
+  if (similar.length) {
+    parts.push(shelfHTML('Similar Artists', similar.map((s) => `
+      <a class="card album" href="#/artist/${encodeURIComponent(s.id)}">
+        ${artHTML(s.coverArt, 160)}
+        <div class="cname">${esc(s.name)}</div>
+      </a>`).join('')));
+  }
+  view().innerHTML = parts.join('');
+  if (popular.length) {
+    wireSongRows($('#pop-list'), popular);
+    $('#play-pop').addEventListener('click', () => player.play(popular, 0));
+  }
 }
 
 async function renderPlaylist(id) {
@@ -356,6 +434,7 @@ function route() {
     album: () => renderAlbum(decodeURIComponent(arg)),
     artist: () => renderArtist(decodeURIComponent(arg)),
     playlist: () => renderPlaylist(decodeURIComponent(arg)),
+    genre: () => renderGenre(decodeURIComponent(arg)),
   }[name] || renderHome;
   Promise.resolve(run()).catch(fail);
 }
@@ -367,6 +446,17 @@ async function enterApp() {
   $('#app').classList.remove('hidden');
   $('#who').textContent = api.currentUsername();
   player.init();
+
+  // Delegated hover-play on album cards: fetch the album and play it in place,
+  // without navigating. Survives per-route innerHTML swaps (listener on #view).
+  view().addEventListener('click', async (e) => {
+    const pb = e.target.closest('[data-play-album]');
+    if (!pb) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const a = await api.album(pb.dataset.playAlbum);
+    if (a && a.song && a.song.length) player.play(a.song, 0);
+  });
 
   // Admin gate + config link-out (best-effort; failures just hide admin).
   try {

@@ -136,6 +136,37 @@ export async function search(query) {
 export const star = (id) => get('/rest/star.view', { id });
 export const unstar = (id) => get('/rest/unstar.view', { id });
 
+export async function genres() {
+  const b = await get('/rest/getGenres.view');
+  return (b.genres && b.genres.genre) || []; // [{ value, songCount, albumCount }]
+}
+export async function albumsByGenre(genre, size = 100) {
+  const b = await get('/rest/getAlbumList2.view', { type: 'byGenre', genre, size });
+  return (b.albumList2 && b.albumList2.album) || [];
+}
+export async function songsByGenre(genre, count = 100) {
+  const b = await get('/rest/getSongsByGenre.view', { genre, count });
+  return (b.songsByGenre && b.songsByGenre.song) || [];
+}
+
+// Artist bio + similar artists (getArtistInfo2). Best-effort → null.
+export async function artistInfo(id) {
+  try {
+    const b = await get('/rest/getArtistInfo2.view', { id, count: 12 });
+    return b.artistInfo2 || null;
+  } catch {
+    return null;
+  }
+}
+export async function topSongs(artistName, count = 10) {
+  try {
+    const b = await get('/rest/getTopSongs.view', { artist: artistName, count });
+    return (b.topSongs && b.topSongs.song) || [];
+  } catch {
+    return [];
+  }
+}
+
 // maraetai-service extensions
 export async function onRepeat(count = 30) {
   const b = await get('/rest/getOnRepeat.view', { count });
