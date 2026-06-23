@@ -113,6 +113,12 @@ func New(upstream *url.URL, st *store.Store, log *slog.Logger) http.Handler {
 	mux.Handle("/rest/getFavourites", favourites)
 	mux.Handle("/rest/getFavourites.view", favourites)
 
+	// getArtistList: paged, slim view of the artist index (the proxy pages the
+	// non-pageable getArtists on the fast side). Auth-only, no play store.
+	artists := newArtistsHandler(auth.NewValidator(upstream), navidrome.New(upstream), log)
+	mux.Handle("/rest/getArtistList", artists)
+	mux.Handle("/rest/getArtistList.view", artists)
+
 	// Catch-all: forward everything else to Navidrome untouched.
 	mux.Handle("/", rp)
 

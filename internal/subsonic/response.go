@@ -75,6 +75,20 @@ type Favourites struct {
 	Song []Child `xml:"song" json:"song,omitempty"`
 }
 
+// Artist is a library artist in the getArtistList response.
+type Artist struct {
+	ID         string `xml:"id,attr" json:"id"`
+	Name       string `xml:"name,attr" json:"name"`
+	CoverArt   string `xml:"coverArt,attr,omitempty" json:"coverArt,omitempty"`
+	AlbumCount int    `xml:"albumCount,attr,omitempty" json:"albumCount,omitempty"`
+}
+
+// ArtistsPage is the container for the getArtistList response (one page of the
+// flattened artist index).
+type ArtistsPage struct {
+	Artist []Artist `xml:"artist" json:"artist,omitempty"`
+}
+
 type apiError struct {
 	Code    int    `xml:"code,attr" json:"code"`
 	Message string `xml:"message,attr" json:"message"`
@@ -93,6 +107,7 @@ type body struct {
 	OnRepeat       *OnRepeat       `xml:"onRepeat,omitempty" json:"onRepeat,omitempty"`
 	SongsForYou    *SongsForYou    `xml:"songsForYou,omitempty" json:"songsForYou,omitempty"`
 	Favourites     *Favourites     `xml:"favourites,omitempty" json:"favourites,omitempty"`
+	ArtistsPage    *ArtistsPage    `xml:"artistList,omitempty" json:"artistList,omitempty"`
 }
 
 type xmlEnvelope struct {
@@ -128,6 +143,11 @@ func WriteSongsForYou(w http.ResponseWriter, q url.Values, songs []Child) {
 // WriteFavourites writes a successful getFavourites response (one page).
 func WriteFavourites(w http.ResponseWriter, q url.Values, songs []Child) {
 	write(w, q, body{Favourites: &Favourites{Song: songs}})
+}
+
+// WriteArtistList writes a successful getArtistList response (one page).
+func WriteArtistList(w http.ResponseWriter, q url.Values, artists []Artist) {
+	write(w, q, body{ArtistsPage: &ArtistsPage{Artist: artists}})
 }
 
 // WriteError writes a Subsonic error response. Note: Subsonic conveys errors in
