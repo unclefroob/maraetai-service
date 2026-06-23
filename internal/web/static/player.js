@@ -1,15 +1,21 @@
-// Audio engine: queue, playback controls, the now-playing bar, and scrobbling.
-// Scrobbles go through the proxy's tee, so web plays land in the play store too.
+// Audio engine: queue, playback controls, shuffle/repeat, the now-playing bar,
+// the queue panel, lyrics, and scrobbling. Scrobbles go through the proxy's tee,
+// so web plays land in the play store too.
 import * as api from './api.js';
 
 const $ = (sel) => document.querySelector(sel);
 
-let queue = [];
+let baseQueue = []; // canonical order as queued
+let queue = [];     // active play order (== baseQueue unless shuffled)
 let index = -1;
-let startedAtMs = 0;   // play-start time for the scrobble `time` stamp
-let scrobbled = false; // crossed the listen threshold this track?
+let shuffleOn = false;
+let repeatMode = 'off'; // 'off' | 'all' | 'one'
+let startedAtMs = 0;    // play-start time for the scrobble `time` stamp
+let scrobbled = false;  // crossed the listen threshold this track?
+let lyricsData = null;  // { synced, line: [{ start, value }] } for the current track
 
 let audio, art, titleEl, artistEl, starBtn, playBtn, progress, curEl, durEl, volEl, bar;
+let shuffleBtn, repeatBtn, queueBtn, lyricsBtn, queuePanel, qpList, lyricsModal, lyBody, lyTitle;
 
 function fmt(sec) {
   if (!isFinite(sec) || sec < 0) sec = 0;
@@ -18,14 +24,31 @@ function fmt(sec) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
+function shuffleArr(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 export function current() {
   return index >= 0 && index < queue.length ? queue[index] : null;
 }
 
 export function play(tracks, startAt = 0) {
   if (!tracks || tracks.length === 0) return;
-  queue = tracks.slice();
-  index = Math.max(0, Math.min(startAt, queue.length - 1));
+  baseQueue = tracks.slice();
+  const start = Math.max(0, Math.min(startAt, baseQueue.length - 1));
+  if (shuffleOn) {
+    const cur = baseQueue[start];
+    queue = [cur, ...shuffleArr(baseQueue.filter((_, i) => i !== start))];
+    index = 0;
+  } else {
+    queue = baseQueue.slice();
+    index = start;
+  }
   loadCurrent();
 }
 
@@ -36,9 +59,12 @@ function loadCurrent() {
   audio.play().catch(() => {});
   startedAtMs = Date.now();
   scrobbled = false;
+  lyricsData = null;
   renderBar(track);
   bar.classList.remove('hidden');
   api.scrobble(track.id, { submission: false }); // now-playing ping
+  renderQueue();
+  if (!lyricsModal.classList.contains('hidden')) loadLyrics();
 }
 
 export function togglePlay() {
@@ -48,20 +74,41 @@ export function togglePlay() {
 }
 
 export function next() {
-  if (index < queue.length - 1) {
-    index += 1;
-    loadCurrent();
-  }
+  if (index < queue.length - 1) { index += 1; loadCurrent(); }
+  else if (repeatMode === 'all') { index = 0; loadCurrent(); }
 }
 
 export function prev() {
   // Restart the track if we're more than 3s in; otherwise go back one.
-  if (audio.currentTime > 3 || index === 0) {
-    audio.currentTime = 0;
-    return;
-  }
+  if (audio.currentTime > 3 || index === 0) { audio.currentTime = 0; return; }
   index -= 1;
   loadCurrent();
+}
+
+function onEnded() {
+  if (repeatMode === 'one') { audio.currentTime = 0; audio.play().catch(() => {}); return; }
+  next();
+}
+
+function toggleShuffle() {
+  const cur = current();
+  shuffleOn = !shuffleOn;
+  shuffleBtn.classList.toggle('on', shuffleOn);
+  if (!cur) return;
+  if (shuffleOn) {
+    queue = [cur, ...shuffleArr(baseQueue.filter((t) => t !== cur))];
+    index = 0;
+  } else {
+    queue = baseQueue.slice();
+    index = Math.max(0, queue.indexOf(cur));
+  }
+  renderQueue();
+}
+
+function cycleRepeat() {
+  repeatMode = repeatMode === 'off' ? 'all' : repeatMode === 'all' ? 'one' : 'off';
+  repeatBtn.textContent = repeatMode === 'one' ? '🔂' : '🔁';
+  repeatBtn.classList.toggle('on', repeatMode !== 'off');
 }
 
 function renderBar(track) {
@@ -91,43 +138,125 @@ async function toggleStar() {
   }
 }
 
+// --- queue panel --------------------------------------------------------
+
+function renderQueue() {
+  if (queuePanel.classList.contains('hidden')) return;
+  const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  qpList.innerHTML = queue.map((t, i) => `
+    <div class="qrow ${i === index ? 'now' : ''}" data-i="${i}">
+      <div class="qmeta">
+        <div class="qtitle">${esc(t.title || 'Unknown')}</div>
+        <div class="qsub muted">${esc(t.artist || '')}</div>
+      </div>
+      <button class="qrm" data-rm="${i}" title="Remove">✕</button>
+    </div>`).join('') || '<div class="empty muted">Queue is empty.</div>';
+  qpList.querySelectorAll('.qrow').forEach((row) => {
+    row.addEventListener('click', (e) => {
+      if (e.target.classList.contains('qrm')) return;
+      index = Number(row.dataset.i); loadCurrent();
+    });
+  });
+  qpList.querySelectorAll('.qrm').forEach((b) => {
+    b.addEventListener('click', (e) => { e.stopPropagation(); removeAt(Number(b.dataset.rm)); });
+  });
+}
+
+function removeAt(i) {
+  queue.splice(i, 1);
+  if (i < index) index -= 1;
+  else if (i === index) {
+    if (queue.length === 0) { audio.pause(); index = -1; renderQueue(); return; }
+    index = Math.min(index, queue.length - 1);
+    loadCurrent();
+    return;
+  }
+  renderQueue();
+}
+
+function toggleQueue() {
+  queuePanel.classList.toggle('hidden');
+  queueBtn.classList.toggle('on', !queuePanel.classList.contains('hidden'));
+  renderQueue();
+}
+
+// --- lyrics -------------------------------------------------------------
+
+async function loadLyrics() {
+  const track = current();
+  if (!track) return;
+  lyTitle.textContent = [track.title, track.artist].filter(Boolean).join(' — ');
+  lyBody.innerHTML = '<div class="loading">Loading…</div>';
+  lyricsData = await api.lyrics(track.id);
+  const lines = (lyricsData && lyricsData.line) || [];
+  if (!lines.length) { lyBody.innerHTML = '<div class="empty muted">No lyrics found.</div>'; return; }
+  const esc = (s) => String(s ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  lyBody.innerHTML = lines.map((l, i) =>
+    `<p class="lyline" data-i="${i}">${esc(l.value) || '&nbsp;'}</p>`).join('');
+}
+
+function toggleLyrics() {
+  lyricsModal.classList.toggle('hidden');
+  lyricsBtn.classList.toggle('on', !lyricsModal.classList.contains('hidden'));
+  if (!lyricsModal.classList.contains('hidden')) loadLyrics();
+}
+
+function syncLyrics() {
+  if (!lyricsData || !lyricsData.synced || lyricsModal.classList.contains('hidden')) return;
+  const lines = lyricsData.line || [];
+  const ms = audio.currentTime * 1000;
+  let active = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if ((lines[i].start ?? 0) <= ms) active = i; else break;
+  }
+  lyBody.querySelectorAll('.lyline').forEach((el, i) => {
+    const on = i === active;
+    if (on && !el.classList.contains('active')) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    el.classList.toggle('active', on);
+  });
+}
+
+// --- time / scrobble ----------------------------------------------------
+
 function onTimeUpdate() {
   const d = audio.duration;
   if (isFinite(d) && d > 0) {
     progress.value = String(Math.round((audio.currentTime / d) * 1000));
     curEl.textContent = fmt(audio.currentTime);
     durEl.textContent = fmt(d);
-    // Last.fm convention: scrobble once past ~half the track or 4 minutes.
-    const threshold = Math.min(d * 0.5, 240);
+    const threshold = Math.min(d * 0.5, 240); // Last.fm convention
     if (!scrobbled && audio.currentTime >= threshold) {
       scrobbled = true;
       const track = current();
       if (track) api.scrobble(track.id, { submission: true, timeMs: startedAtMs });
     }
   }
+  syncLyrics();
 }
 
 export function init() {
-  audio = $('#audio');
-  bar = $('#player');
-  art = $('#np-art');
-  titleEl = $('#np-title');
-  artistEl = $('#np-artist');
-  starBtn = $('#np-star');
-  playBtn = $('#np-play');
-  progress = $('#np-progress');
-  curEl = $('#np-cur');
-  durEl = $('#np-dur');
-  volEl = $('#np-vol');
+  audio = $('#audio'); bar = $('#player');
+  art = $('#np-art'); titleEl = $('#np-title'); artistEl = $('#np-artist'); starBtn = $('#np-star');
+  playBtn = $('#np-play'); progress = $('#np-progress'); curEl = $('#np-cur'); durEl = $('#np-dur'); volEl = $('#np-vol');
+  shuffleBtn = $('#np-shuffle'); repeatBtn = $('#np-repeat'); queueBtn = $('#np-queue'); lyricsBtn = $('#np-lyrics');
+  queuePanel = $('#queue-panel'); qpList = $('#qp-list');
+  lyricsModal = $('#lyrics-modal'); lyBody = $('#ly-body'); lyTitle = $('#ly-title');
 
   playBtn.addEventListener('click', togglePlay);
   $('#np-prev').addEventListener('click', prev);
   $('#np-next').addEventListener('click', next);
   starBtn.addEventListener('click', toggleStar);
+  shuffleBtn.addEventListener('click', toggleShuffle);
+  repeatBtn.addEventListener('click', cycleRepeat);
+  queueBtn.addEventListener('click', toggleQueue);
+  lyricsBtn.addEventListener('click', toggleLyrics);
+  $('#qp-clear').addEventListener('click', () => { baseQueue = []; queue = []; index = -1; audio.pause(); renderQueue(); });
+  $('#ly-close').addEventListener('click', toggleLyrics);
 
   audio.addEventListener('play', () => { playBtn.textContent = '⏸'; });
   audio.addEventListener('pause', () => { playBtn.textContent = '▶'; });
-  audio.addEventListener('ended', next);
+  audio.addEventListener('ended', onEnded);
   audio.addEventListener('timeupdate', onTimeUpdate);
 
   progress.addEventListener('input', () => {

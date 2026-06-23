@@ -158,6 +158,18 @@ export function scrobble(id, { submission = true, timeMs } = {}) {
   return get('/rest/scrobble.view', extra).catch(() => {}); // best-effort
 }
 
+// Lyrics (OpenSubsonic getLyricsBySongId). Returns the first structured set
+// ({ synced, line: [{ start, value }] }) or null. Best-effort.
+export async function lyrics(id) {
+  try {
+    const b = await get('/rest/getLyricsBySongId.view', { id });
+    const list = (b.lyricsList && b.lyricsList.structuredLyrics) || [];
+    return list[0] || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function stats(days) {
   const res = await fetch(`/api/stats?${authParams().toString()}&days=${days}`);
   if (!res.ok) throw new Error(`stats failed (${res.status})`);
