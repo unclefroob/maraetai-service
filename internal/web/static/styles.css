@@ -40,6 +40,8 @@ button { font: inherit; cursor: pointer; }
   background: var(--surface2); border: 1px solid var(--line); color: var(--text);
   padding: 10px; border-radius: 8px;
 }
+.login label.remember { display: flex; flex-direction: row; align-items: center; gap: 8px; color: var(--muted); cursor: pointer; }
+.login label.remember input { width: auto; accent-color: var(--accent); }
 .login button[type=submit] {
   background: var(--accent); color: #04130a; border: 0; padding: 11px; border-radius: 8px; font-weight: 600;
 }

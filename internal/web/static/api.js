@@ -10,7 +10,8 @@ let creds = null; // { username, password }
 
 export function loadCreds() {
   try {
-    const raw = sessionStorage.getItem(SESSION_KEY);
+    // localStorage = "stay signed in"; sessionStorage = this-tab-only.
+    const raw = localStorage.getItem(SESSION_KEY) || sessionStorage.getItem(SESSION_KEY);
     creds = raw ? JSON.parse(raw) : null;
   } catch {
     creds = null;
@@ -18,14 +19,18 @@ export function loadCreds() {
   return creds;
 }
 
-export function saveCreds(c) {
+export function saveCreds(c, remember = false) {
   creds = c;
-  sessionStorage.setItem(SESSION_KEY, JSON.stringify(c));
+  const store = remember ? localStorage : sessionStorage;
+  const other = remember ? sessionStorage : localStorage;
+  try { store.setItem(SESSION_KEY, JSON.stringify(c)); } catch {}
+  try { other.removeItem(SESSION_KEY); } catch {}
 }
 
 export function clearCreds() {
   creds = null;
-  sessionStorage.removeItem(SESSION_KEY);
+  try { sessionStorage.removeItem(SESSION_KEY); } catch {}
+  try { localStorage.removeItem(SESSION_KEY); } catch {}
 }
 
 export function currentUsername() {

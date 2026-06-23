@@ -5,6 +5,8 @@ import * as api from './api.js';
 
 const $ = (sel) => document.querySelector(sel);
 
+const PERSIST_KEY = 'maraetai.player'; // last queue + position, restored on reload
+
 // Monochrome inline SVGs (respect currentColor) so controls match the macOS
 // app's SF Symbols instead of rendering as coloured emoji.
 const S = 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
@@ -53,6 +55,55 @@ export function current() {
   return index >= 0 && index < queue.length ? queue[index] : null;
 }
 
+// --- persistence: survive a page reload --------------------------------
+
+let lastSave = 0;
+
+function save() {
+  try {
+    localStorage.setItem(PERSIST_KEY, JSON.stringify({
+      baseQueue, queue, index,
+      t: audio ? audio.currentTime : 0,
+      shuffleOn, repeatMode,
+      vol: audio ? audio.volume : 1,
+    }));
+  } catch {}
+}
+
+// clearSaved wipes the restored state (on logout / session expiry) so the next
+// user on this browser doesn't inherit a queue.
+export function clearSaved() { try { localStorage.removeItem(PERSIST_KEY); } catch {} }
+
+// restore rebuilds the last queue and now-playing bar (paused, seeked to the
+// saved position). Volume is restored regardless of whether a queue was saved.
+function restore() {
+  let st = null;
+  try { st = JSON.parse(localStorage.getItem(PERSIST_KEY) || 'null'); } catch {}
+  const vol = st && typeof st.vol === 'number' ? st.vol : 1;
+  audio.volume = vol;
+  volEl.value = String(Math.round(vol * 100));
+  if (!st || !Array.isArray(st.queue) || !st.queue.length) return;
+
+  baseQueue = Array.isArray(st.baseQueue) && st.baseQueue.length ? st.baseQueue : st.queue.slice();
+  queue = st.queue;
+  index = Math.min(Math.max(0, st.index | 0), queue.length - 1);
+  shuffleOn = !!st.shuffleOn;
+  repeatMode = st.repeatMode || 'off';
+
+  const track = current();
+  if (!track) return;
+  audio.src = api.streamURL(track.id);
+  const seek = Number(st.t) || 0;
+  if (seek > 0) audio.addEventListener('loadedmetadata', () => { try { audio.currentTime = seek; } catch {} }, { once: true });
+  renderBar(track);
+  bar.classList.remove('hidden');
+
+  shuffleBtn.classList.toggle('on', shuffleOn);
+  repeatBtn.innerHTML = repeatMode === 'one' ? ICONS.repeatOne : ICONS.repeat;
+  repeatBtn.classList.toggle('on', repeatMode !== 'off');
+  renderQueue();
+}
+
 export function play(tracks, startAt = 0) {
   if (!tracks || tracks.length === 0) return;
   baseQueue = tracks.slice();
@@ -77,6 +128,7 @@ export function enqueue(tracks) {
   baseQueue.push(...list);
   queue.push(...list);
   renderQueue();
+  save();
 }
 
 // playNext inserts one track (or a list) immediately after the current track.
@@ -89,6 +141,7 @@ export function playNext(tracks) {
   const bi = baseQueue.indexOf(cur);
   baseQueue.splice(bi < 0 ? baseQueue.length : bi + 1, 0, ...list);
   renderQueue();
+  save();
 }
 
 function loadCurrent() {
@@ -103,6 +156,7 @@ function loadCurrent() {
   bar.classList.remove('hidden');
   api.scrobble(track.id, { submission: false }); // now-playing ping
   renderQueue();
+  save();
   if (!lyricsModal.classList.contains('hidden')) loadLyrics();
 }
 
@@ -157,12 +211,14 @@ function toggleShuffle() {
     index = Math.max(0, queue.indexOf(cur));
   }
   renderQueue();
+  save();
 }
 
 function cycleRepeat() {
   repeatMode = repeatMode === 'off' ? 'all' : repeatMode === 'all' ? 'one' : 'off';
   repeatBtn.innerHTML = repeatMode === 'one' ? ICONS.repeatOne : ICONS.repeat;
   repeatBtn.classList.toggle('on', repeatMode !== 'off');
+  save();
 }
 
 function renderBar(track) {
@@ -221,12 +277,13 @@ function removeAt(i) {
   queue.splice(i, 1);
   if (i < index) index -= 1;
   else if (i === index) {
-    if (queue.length === 0) { audio.pause(); index = -1; renderQueue(); return; }
+    if (queue.length === 0) { audio.pause(); index = -1; renderQueue(); save(); return; }
     index = Math.min(index, queue.length - 1);
     loadCurrent();
     return;
   }
   renderQueue();
+  save();
 }
 
 function toggleQueue() {
@@ -286,6 +343,8 @@ function onTimeUpdate() {
       if (track) api.scrobble(track.id, { submission: true, timeMs: startedAtMs });
     }
   }
+  const now = Date.now();
+  if (now - lastSave > 5000) { lastSave = now; save(); } // persist position periodically
   syncLyrics();
 }
 
@@ -315,7 +374,7 @@ export function init() {
   repeatBtn.addEventListener('click', cycleRepeat);
   queueBtn.addEventListener('click', toggleQueue);
   lyricsBtn.addEventListener('click', toggleLyrics);
-  $('#qp-clear').addEventListener('click', () => { baseQueue = []; queue = []; index = -1; audio.pause(); renderQueue(); });
+  $('#qp-clear').addEventListener('click', () => { baseQueue = []; queue = []; index = -1; audio.pause(); audio.removeAttribute('src'); bar.classList.add('hidden'); renderQueue(); save(); });
   $('#ly-close').addEventListener('click', toggleLyrics);
 
   audio.addEventListener('play', () => { playBtn.innerHTML = ICONS.pause; });
@@ -329,6 +388,11 @@ export function init() {
     const d = audio.duration;
     if (isFinite(d) && d > 0) audio.currentTime = (Number(progress.value) / 1000) * d;
   });
-  volEl.addEventListener('input', () => { audio.volume = Number(volEl.value) / 100; });
-  audio.volume = 1;
+  volEl.addEventListener('input', () => { audio.volume = Number(volEl.value) / 100; save(); });
+
+  // Capture the final position when the tab is hidden/closed, then restore the
+  // last session (queue, position, volume, shuffle/repeat) — paused.
+  window.addEventListener('pagehide', save);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') save(); });
+  restore();
 }

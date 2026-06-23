@@ -823,7 +823,7 @@ function initEvents() {
     const err = $('#login-error');
     err.classList.add('hidden');
     try {
-      api.saveCreds({ username: $('#username').value, password: $('#password').value });
+      api.saveCreds({ username: $('#username').value, password: $('#password').value }, $('#remember').checked);
       await api.ping();
       await enterApp();
     } catch (ex) {
@@ -832,7 +832,7 @@ function initEvents() {
       err.classList.remove('hidden');
     }
   });
-  $('#logout').addEventListener('click', () => { api.clearCreds(); location.hash = ''; location.reload(); });
+  $('#logout').addEventListener('click', () => { api.clearCreds(); player.clearSaved(); location.hash = ''; location.reload(); });
   for (const b of document.querySelectorAll('[data-route]')) {
     b.addEventListener('click', () => { location.hash = `#/${b.dataset.route}`; });
   }
@@ -852,6 +852,7 @@ function handleAuthExpired() {
   if (authExpired || $('#app').classList.contains('hidden')) return;
   authExpired = true;
   api.clearCreds();
+  player.clearSaved();
   $('#app').classList.add('hidden');
   $('#player').classList.add('hidden');
   $('#login').classList.remove('hidden');
