@@ -61,6 +61,10 @@ export async function get(path, extra = {}) {
   const res = await fetch(`${path}?${params.toString()}`);
   const body = (await res.json())['subsonic-response'];
   if (!body || body.status !== 'ok') {
+    const code = body && body.error ? body.error.code : 0;
+    // Subsonic auth errors (40 wrong creds, 41-44 token/auth) → the session is no
+    // longer valid; let the app return the user to the login screen.
+    if (code >= 40 && code <= 44) document.dispatchEvent(new CustomEvent('auth:expired'));
     const msg = body && body.error ? body.error.message : `request failed (${res.status})`;
     throw new Error(msg);
   }

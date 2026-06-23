@@ -785,6 +785,7 @@ function route() {
 // --- auth / boot --------------------------------------------------------
 
 async function enterApp() {
+  authExpired = false;
   $('#login').classList.add('hidden');
   $('#app').classList.remove('hidden');
   $('#who').textContent = api.currentUsername();
@@ -836,6 +837,27 @@ function initEvents() {
     b.addEventListener('click', () => { location.hash = `#/${b.dataset.route}`; });
   }
   window.addEventListener('hashchange', route);
+
+  // A track that can't be streamed: tell the user it was skipped (player.js auto-advances).
+  document.addEventListener('player:error', (e) => toast(`Couldn't play ${(e.detail && e.detail.title) || 'that track'} — skipping`));
+  // The session went invalid mid-use: drop back to the login screen with a notice.
+  document.addEventListener('auth:expired', handleAuthExpired);
+}
+
+// handleAuthExpired returns to login when the server rejects our credentials
+// while the app is open. Only acts when the app is actually visible (so a failed
+// login attempt doesn't double-report), and once until the next successful login.
+let authExpired = false;
+function handleAuthExpired() {
+  if (authExpired || $('#app').classList.contains('hidden')) return;
+  authExpired = true;
+  api.clearCreds();
+  $('#app').classList.add('hidden');
+  $('#player').classList.add('hidden');
+  $('#login').classList.remove('hidden');
+  const err = $('#login-error');
+  err.textContent = 'Your session expired — please sign in again.';
+  err.classList.remove('hidden');
 }
 
 async function boot() {

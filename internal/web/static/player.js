@@ -129,6 +129,21 @@ function onEnded() {
   next();
 }
 
+let failStreak = 0; // consecutive load/stream failures, to avoid skip-storms
+
+// onError fires when a track can't be streamed (404, expired stream auth, codec,
+// network drop). The HTML5 'ended' event does NOT fire on a load error, so without
+// this the queue would silently stall. We surface a toast and auto-advance, but
+// stop after a full lap of failures so a dead queue doesn't loop forever.
+function onError() {
+  const track = current();
+  if (!track || !audio.src) return;
+  document.dispatchEvent(new CustomEvent('player:error', { detail: { title: track.title || 'this track' } }));
+  failStreak += 1;
+  if (failStreak >= Math.max(1, queue.length)) { failStreak = 0; return; }
+  if (index < queue.length - 1 || repeatMode === 'all') next();
+}
+
 function toggleShuffle() {
   const cur = current();
   shuffleOn = !shuffleOn;
@@ -305,7 +320,9 @@ export function init() {
 
   audio.addEventListener('play', () => { playBtn.innerHTML = ICONS.pause; });
   audio.addEventListener('pause', () => { playBtn.innerHTML = ICONS.play; });
+  audio.addEventListener('playing', () => { failStreak = 0; }); // a track streamed OK → reset the failure guard
   audio.addEventListener('ended', onEnded);
+  audio.addEventListener('error', onError);
   audio.addEventListener('timeupdate', onTimeUpdate);
 
   progress.addEventListener('input', () => {
