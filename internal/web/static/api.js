@@ -7,11 +7,14 @@ const API_VERSION = '1.16.1';
 const SESSION_KEY = 'maraetai.creds';
 
 let creds = null; // { username, password }
+let remembered = false; // true when creds live in localStorage ("stay signed in")
 
 export function loadCreds() {
   try {
     // localStorage = "stay signed in"; sessionStorage = this-tab-only.
-    const raw = localStorage.getItem(SESSION_KEY) || sessionStorage.getItem(SESSION_KEY);
+    const local = localStorage.getItem(SESSION_KEY);
+    const raw = local || sessionStorage.getItem(SESSION_KEY);
+    remembered = !!local;
     creds = raw ? JSON.parse(raw) : null;
   } catch {
     creds = null;
@@ -21,14 +24,21 @@ export function loadCreds() {
 
 export function saveCreds(c, remember = false) {
   creds = c;
+  remembered = remember;
   const store = remember ? localStorage : sessionStorage;
   const other = remember ? sessionStorage : localStorage;
   try { store.setItem(SESSION_KEY, JSON.stringify(c)); } catch {}
   try { other.removeItem(SESSION_KEY); } catch {}
 }
 
+// isRemembered reports whether the current session is "stay signed in" (creds in
+// localStorage) vs. tab-only (sessionStorage). Other persisted state (e.g. the
+// player queue) mirrors this so it never outlives the credentials that created it.
+export function isRemembered() { return remembered; }
+
 export function clearCreds() {
   creds = null;
+  remembered = false;
   try { sessionStorage.removeItem(SESSION_KEY); } catch {}
   try { localStorage.removeItem(SESSION_KEY); } catch {}
 }
