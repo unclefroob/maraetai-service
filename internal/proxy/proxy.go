@@ -130,6 +130,16 @@ func New(upstream *url.URL, st *store.Store, navidromePublicURL string, log *slo
 	mux.Handle("/rest/getArtistList", artists)
 	mux.Handle("/rest/getArtistList.view", artists)
 
+	// search3/search2: forwarded upstream, but with lyrics-blob "artists"
+	// stripped from the result. Mistagged files can put a whole LRC sheet in
+	// ID3's TEXT (lyricist) frame, which Navidrome turns into an artist row
+	// that then matches any query hitting a word in the lyrics. Fail-open: an
+	// unparseable response is passed through untouched.
+	search := newSearchFilter(upstream, log)
+	for _, p := range []string{"/rest/search3", "/rest/search3.view", "/rest/search2", "/rest/search2.view"} {
+		mux.Handle(p, search)
+	}
+
 	// Catch-all: forward everything else to Navidrome untouched.
 	mux.Handle("/", rp)
 
