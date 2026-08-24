@@ -37,6 +37,16 @@ upstream edits/deletes. Recording is async and never blocks playback.
   with listening stats (`GET /api/stats`), recent-play history, and a link out to
   Navidrome's own UI for user management (set `NAVIDROME_PUBLIC_URL` to enable it).
 
+- **Clean search results** — `search3`/`search2` are forwarded upstream, but
+  lyrics-blob "artists" are stripped from the response. Some taggers dump a
+  whole `.lrc` sheet into ID3's `TEXT` (lyricist) frame; Navidrome maps
+  lyricist to an artist role, so the sheet becomes an artist row and then
+  matches any query hitting a word in the lyrics (searching `Aga` returns a
+  lyric sheet containing *"again"*). Fixing the tags upstream is the real
+  answer — this is the backstop so one mistagged file can't pollute search for
+  every client. Fail-open: a response the filter can't parse is passed through
+  byte-for-byte.
+
 **Backwards compatible by design.** Everything standard is forwarded to
 Navidrome untouched, so a plain Subsonic client works through the proxy exactly
 as before. The Maraetai apps gate the extensions behind an explicit *server
@@ -61,6 +71,7 @@ app → proxy
         ├─ /rest/getOnRepeat[.view]       → most-replayed songs (song-level On Repeat, from the play store)
         ├─ /rest/getSongsForYou[.view]    → personalized daily mix (rotation + similar-artist discovery), from play history
         ├─ /rest/getArtistSongs[.view]    → whole-discography fan-out done server-side (1 client round-trip)
+        ├─ /rest/search3[.view]           → forwarded, with lyrics-blob "artists" filtered out of the result
         └─ everything else                → streaming reverse proxy → Navidrome
 ```
 
