@@ -78,6 +78,11 @@ button { font: inherit; cursor: pointer; }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .spl:hover { color: var(--text); background: var(--surface2); }
+/* Drop target while dragging an album card from a shelf/search results. */
+.spl.drag-over { color: var(--text); background: var(--accent); background: color-mix(in srgb, var(--accent) 25%, var(--surface2)); outline: 1px dashed var(--accent); outline-offset: -1px; }
+/* Grabbable affordance on album cards (they're draggable onto sidebar playlists). */
+.card.album { cursor: grab; }
+.card.album:active { cursor: grabbing; }
 .snav-foot { margin-top: auto; padding-top: 12px; }
 .who-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 12px; }
 
@@ -144,7 +149,15 @@ button { font: inherit; cursor: pointer; }
 .tracklist { display: grid; gap: 1px; }
 .trow { display: flex; align-items: center; gap: 14px; padding: 9px 10px; border-radius: 8px; cursor: pointer; }
 .trow:hover { background: var(--surface); }
+.trow:active { cursor: grabbing; } /* rows are draggable onto sidebar playlists */
 .tnum { width: 22px; text-align: right; color: var(--muted); font-size: 13px; }
+
+/* Playlist edit mode: reorder by dragging a row's handle up/down (pointer-
+   events based, not native HTML5 DnD — see wirePlaylistReorder in app.js). */
+.tnum.handle { display: flex; align-items: center; justify-content: center; opacity: .6; cursor: grab; touch-action: none; }
+.tnum.handle .bi { width: 14px; height: 14px; }
+.tnum.handle:active { cursor: grabbing; }
+.trow.dragging { opacity: .6; background: var(--surface); box-shadow: 0 2px 8px rgba(0,0,0,.25); }
 .tmeta { flex: 1; min-width: 0; }
 .ttitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tsub { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -197,6 +210,7 @@ button { font: inherit; cursor: pointer; }
 .dh-actions { margin-top: 16px; display: flex; gap: 10px; }
 .primary { background: var(--accent); color: var(--accent-ink); border: 0; padding: 10px 18px; border-radius: 999px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
 .love.on { color: var(--accent); border-color: var(--accent); }
+.ghost.on { color: var(--accent); border-color: var(--accent); } /* e.g. the playlist Edit/Done toggle */
 /* Inline button glyphs (Play / Shuffle) — sized to the button text. */
 .bi { width: 1.1em; height: 1.1em; flex: none; }
 
@@ -296,6 +310,22 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px;
 /* Page header row (title + actions, e.g. Playlists "+ New") */
 .page-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 
+/* Playlists page: "My Playlists" / "Shared Playlists" subsections. Shared is a
+   <details> so it's collapsed by default; the marker is a rotating triangle
+   drawn to match the shelf h2 sizing used elsewhere. */
+.pl-section { margin-bottom: 28px; }
+.pl-section > h2 { margin: 0 0 12px; font-size: 18px; }
+.pl-shared > summary {
+  cursor: pointer; list-style: none; user-select: none;
+  display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+}
+.pl-shared > summary::-webkit-details-marker { display: none; }
+.pl-shared > summary::before {
+  content: '▸'; font-size: 11px; color: var(--muted); transition: transform .15s ease;
+}
+.pl-shared[open] > summary::before { transform: rotate(90deg); }
+.pl-shared > summary > h2 { margin: 0; }
+
 /* Compact dialog (rename / confirm / add-to-playlist picker) */
 .modal-card.pick { width: min(420px, 92vw); }
 .pick-body { padding: 16px 18px; display: grid; gap: 14px; overflow-y: auto; }
@@ -329,8 +359,10 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px;
   .snav-foot { margin: 0; padding: 0; }
   .who-row { padding: 0; }
   .view { grid-row: 2; padding: 16px; }
-  .player { grid-template-columns: 1fr auto; height: auto; padding: 10px 12px; gap: 10px; }
-  .np-right { display: none; }
+  .player { grid-template-columns: 1fr auto auto; height: auto; padding: 10px 12px; gap: 10px; }
+  /* Volume is redundant on touch (hardware buttons) and there's no room for
+     the slider; lyrics/queue stay reachable, just narrower without it. */
+  #np-vol-ic, #np-vol { display: none; }
   .np-seek { width: 100%; }
   .detail-head { flex-direction: column; align-items: flex-start; }
   .detail-head .art { width: 140px; height: 140px; }

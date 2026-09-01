@@ -15,12 +15,13 @@ let navidromeUrl = '';
 const SVG_PLAY = '<svg class="bi" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>';
 const SVG_SHUFFLE = '<svg class="bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>';
 const SVG_MORE = '<svg class="bi" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>';
+const SVG_GRIP = '<svg class="bi" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>';
 
 // --- shared render helpers ---------------------------------------------
 
 function songRowsHTML(songs) {
   return songs.map((s, i) => `
-    <div class="trow" data-idx="${i}">
+    <div class="trow" data-idx="${i}" draggable="true" data-song-id="${esc(s.id)}" title="Drag onto a playlist in the sidebar to add this song">
       <span class="tnum">${i + 1}</span>
       <div class="tmeta">
         <div class="ttitle">${esc(s.title || 'Unknown')}</div>
@@ -36,11 +37,14 @@ function songRowsHTML(songs) {
 
 // Wire a rendered track list: a row plays the whole list from that point, the
 // heart favourites the song, and the ⋯ button opens a per-song action menu.
-// ctx (optional): { onRemove(i) } adds a "Remove from this playlist" action.
+// ctx (optional): { onRemove(i) } adds a "Remove from this playlist" action;
+// { noPlayOnClick: true } skips the play-on-click binding (used in playlist
+// edit mode, where a click is more likely a mis-timed drag than an intent to
+// play).
 function wireSongRows(container, songs, ctx) {
   container.querySelectorAll('.trow').forEach((row) => {
     const i = Number(row.dataset.idx);
-    row.addEventListener('click', (e) => {
+    if (!(ctx && ctx.noPlayOnClick)) row.addEventListener('click', (e) => {
       if (e.target.closest('.trow-actions')) return; // let the action buttons handle their own clicks
       player.play(songs, i);
     });
@@ -228,6 +232,40 @@ async function addToPlaylistDialog(song) {
   inp.focus();
 }
 
+// addAlbumToPlaylist: drag-and-drop target for an album card dropped onto a
+// sidebar playlist. Adds every track, in album order; added one at a time
+// (not Promise.all) so the playlist ends up in track order rather than
+// whatever order concurrent requests happen to land in.
+async function addAlbumToPlaylist(albumId, playlistId) {
+  let a;
+  try { a = await api.album(albumId); } catch { toast('Could not load album'); return; }
+  const songs = (a && a.song) || [];
+  if (!songs.length) { toast('Album has no songs'); return; }
+  let added = 0;
+  for (const s of songs) {
+    try { await api.updatePlaylist({ playlistId, songIdToAdd: s.id }); added++; }
+    catch { /* keep going — report the partial count below */ }
+  }
+  if (added === songs.length) toast(`Added "${a.name}" (${added} songs) to playlist`);
+  else if (added > 0) toast(`Added ${added} of ${songs.length} songs from "${a.name}"`);
+  else toast('Could not add album to playlist');
+  // If that playlist is the one currently open, refresh it to show the new tracks.
+  const m = location.hash.match(/^#\/playlist\/(.+)$/);
+  if (m && decodeURIComponent(m[1]) === playlistId) renderPlaylist(playlistId);
+}
+
+// addSongToPlaylist: drag-and-drop target for a single track row (album,
+// playlist, search results, artist popular songs, …) dropped onto a sidebar
+// playlist.
+async function addSongToPlaylist(songId, playlistId) {
+  try {
+    await api.updatePlaylist({ playlistId, songIdToAdd: songId });
+    toast('Added to playlist');
+  } catch { toast('Could not add song to playlist'); return; }
+  const m = location.hash.match(/^#\/playlist\/(.+)$/);
+  if (m && decodeURIComponent(m[1]) === playlistId) renderPlaylist(playlistId);
+}
+
 function songCardsHTML(songs) {
   return songs.map((s, i) => `
     <button class="card song" data-idx="${i}">
@@ -240,7 +278,7 @@ function songCardsHTML(songs) {
 
 function albumCardsHTML(albums) {
   return albums.map((a) => `
-    <a class="card album" href="#/album/${encodeURIComponent(a.id)}">
+    <a class="card album" href="#/album/${encodeURIComponent(a.id)}" draggable="true" data-album-id="${esc(a.id)}" title="Drag onto a playlist in the sidebar to add this album">
       <div class="art-wrap">
         ${artHTML(a.coverArt, 200)}
         <button class="card-play" data-play-album="${esc(a.id)}" title="Play">${SVG_PLAY}</button>
@@ -535,21 +573,38 @@ async function renderMyMusic() {
   } catch (e) { body.innerHTML = `<div class="error">${esc(e.message)}</div>`; }
 }
 
-async function renderPlaylists() {
-  loading();
-  const pls = await api.playlists();
-  view().innerHTML = `
-    <div class="page-head">
-      <h1 class="page-title">Playlists</h1>
-      <button id="pl-new" class="ghost">+ New playlist</button>
-    </div>` + (pls.length
-    ? `<div class="grid">${pls.map((p) => `
+// playlistCardsHTML: the shared grid-of-cards markup used by both the
+// "My Playlists" and "Shared Playlists" sections.
+function playlistCardsHTML(list) {
+  return list.length
+    ? `<div class="grid">${list.map((p) => `
         <a class="card album" href="#/playlist/${encodeURIComponent(p.id)}">
           ${artHTML(p.coverArt, 200)}
           <div class="cname">${esc(p.name)}</div>
           <div class="csub muted">${p.songCount || 0} songs</div>
         </a>`).join('')}</div>`
-    : '<div class="empty muted">No playlists yet.</div>');
+    : '<div class="empty muted">No playlists yet.</div>';
+}
+
+async function renderPlaylists() {
+  loading();
+  const pls = await api.playlists();
+  const me = (api.currentUsername() || '').toLowerCase();
+  const mine = pls.filter((p) => (p.owner || '').toLowerCase() === me);
+  const shared = pls.filter((p) => (p.owner || '').toLowerCase() !== me);
+  view().innerHTML = `
+    <div class="page-head">
+      <h1 class="page-title">Playlists</h1>
+      <button id="pl-new" class="ghost">+ New playlist</button>
+    </div>` + (pls.length ? `
+    <section class="pl-section">
+      <h2>My Playlists</h2>
+      ${playlistCardsHTML(mine)}
+    </section>` + (shared.length ? `
+    <details class="pl-section pl-shared">
+      <summary><h2>Shared Playlists</h2></summary>
+      ${playlistCardsHTML(shared)}
+    </details>` : '') : '<div class="empty muted">No playlists yet.</div>');
   $('#pl-new').addEventListener('click', async () => {
     const name = await promptDialog('New playlist', '', 'Create');
     if (!name) return;
@@ -563,7 +618,9 @@ async function renderSidebarPlaylists() {
   if (!el) return;
   try {
     const pls = await api.playlists();
-    el.innerHTML = pls.map((p) =>
+    const me = (api.currentUsername() || '').toLowerCase();
+    const mine = pls.filter((p) => (p.owner || '').toLowerCase() === me);
+    el.innerHTML = mine.map((p) =>
       `<a class="spl" href="#/playlist/${encodeURIComponent(p.id)}">${esc(p.name)}</a>`).join('');
   } catch { el.innerHTML = ''; }
 }
@@ -651,40 +708,138 @@ async function renderPlaylist(id) {
   const p = await api.playlist(id);
   if (!p) return fail(new Error('Playlist not found'));
   const songs = p.entry || [];
-  view().innerHTML = `
-    <div class="detail-head">
-      ${artHTML(p.coverArt, 300)}
-      <div class="dh-meta">
-        <div class="dh-kind muted">PLAYLIST</div>
-        <h1>${esc(p.name)}</h1>
-        <div class="muted">${songs.length} songs</div>
-        <div class="dh-actions">
-          <button id="play-all" class="primary">${SVG_PLAY}Play</button>
-          <button id="shuffle-all" class="ghost">${SVG_SHUFFLE}Shuffle</button>
-          <button id="pl-rename" class="ghost">Rename</button>
-          <button id="pl-delete" class="ghost">Delete</button>
+  let editMode = false;
+
+  const paint = () => {
+    view().innerHTML = `
+      <div class="detail-head">
+        ${artHTML(p.coverArt, 300)}
+        <div class="dh-meta">
+          <div class="dh-kind muted">PLAYLIST</div>
+          <h1>${esc(p.name)}</h1>
+          <div class="muted">${songs.length} songs</div>
+          <div class="dh-actions">
+            <button id="play-all" class="primary">${SVG_PLAY}Play</button>
+            <button id="shuffle-all" class="ghost">${SVG_SHUFFLE}Shuffle</button>
+            <button id="pl-edit" class="ghost ${editMode ? 'on' : ''}">${editMode ? 'Done' : 'Edit'}</button>
+            <button id="pl-rename" class="ghost">Rename</button>
+            <button id="pl-delete" class="ghost">Delete</button>
+          </div>
         </div>
       </div>
-    </div>
-    <div class="tracklist">${songRowsHTML(songs)}</div>`;
-  const removeFromPlaylist = async (i) => {
-    try { await api.updatePlaylist({ playlistId: id, songIndexToRemove: i }); renderPlaylist(id); }
-    catch { toast('Could not remove song'); }
+      <div class="tracklist ${editMode ? 'reorder-mode' : ''}" id="pl-tracklist">${songRowsHTML(songs)}</div>`;
+
+    const tl = $('#pl-tracklist');
+    const removeFromPlaylist = async (i) => {
+      try { await api.updatePlaylist({ playlistId: id, songIndexToRemove: i }); renderPlaylist(id); }
+      catch { toast('Could not remove song'); }
+    };
+    wireSongRows(view(), songs, { onRemove: removeFromPlaylist, noPlayOnClick: editMode });
+    if (editMode) {
+      // Edit mode: swap the track number for a drag handle that starts a
+      // pointer-based reorder drag (see wirePlaylistReorder). draggable is
+      // forced off on the handle itself so it can't also kick off the row's
+      // native whole-row drag (used elsewhere to drop a song onto a sidebar
+      // playlist) at the same time.
+      tl.querySelectorAll('.tnum').forEach((el) => {
+        el.innerHTML = SVG_GRIP;
+        el.classList.add('handle');
+        el.draggable = false;
+      });
+      wirePlaylistReorder(tl, songs, id);
+    }
+
+    $('#play-all').addEventListener('click', () => player.play(songs, 0));
+    $('#shuffle-all').addEventListener('click', () => player.play(shuffle(songs), 0));
+    $('#pl-edit').addEventListener('click', () => { editMode = !editMode; paint(); });
+    $('#pl-rename').addEventListener('click', async () => {
+      const name = await promptDialog('Rename playlist', p.name, 'Rename');
+      if (!name || name === p.name) return;
+      try { await api.updatePlaylist({ playlistId: id, name }); renderSidebarPlaylists(); renderPlaylist(id); }
+      catch { toast('Could not rename playlist'); }
+    });
+    $('#pl-delete').addEventListener('click', async () => {
+      const ok = await confirmDialog(`Delete "${p.name}"?`, 'This removes the playlist for everyone on the server.', 'Delete');
+      if (!ok) return;
+      try { await api.deletePlaylist(id); renderSidebarPlaylists(); location.hash = '#/playlists'; }
+      catch { toast('Could not delete playlist'); }
+    });
   };
-  wireSongRows(view(), songs, { onRemove: removeFromPlaylist });
-  $('#play-all').addEventListener('click', () => player.play(songs, 0));
-  $('#shuffle-all').addEventListener('click', () => player.play(shuffle(songs), 0));
-  $('#pl-rename').addEventListener('click', async () => {
-    const name = await promptDialog('Rename playlist', p.name, 'Rename');
-    if (!name || name === p.name) return;
-    try { await api.updatePlaylist({ playlistId: id, name }); renderSidebarPlaylists(); renderPlaylist(id); }
-    catch { toast('Could not rename playlist'); }
-  });
-  $('#pl-delete').addEventListener('click', async () => {
-    const ok = await confirmDialog(`Delete "${p.name}"?`, 'This removes the playlist for everyone on the server.', 'Delete');
-    if (!ok) return;
-    try { await api.deletePlaylist(id); renderSidebarPlaylists(); location.hash = '#/playlists'; }
-    catch { toast('Could not delete playlist'); }
+
+  paint();
+}
+
+// wirePlaylistReorder: in playlist edit mode, dragging a row's grip handle
+// up/down within the same tracklist reorders the playlist.
+//
+// This intentionally does NOT use the native HTML5 Drag and Drop API (the
+// whole-row draggable="true" + dragstart/dragover/drop used elsewhere for
+// dropping a song onto a sidebar playlist). Two rounds of testing showed
+// native DnD here is unreliable in ways that are hard to pin down: a
+// synthetic DragEvent test dispatched straight at listeners can "pass" while
+// bypassing the browser's real drop-acceptance rules entirely (it doesn't
+// require dragenter/dragover preventDefault the way a genuine drag does),
+// while a real user-driven drag reportedly moved visually but never
+// persisted — i.e. the browser's native DnD state machine was rejecting the
+// drop for a reason that never reproduced under automation. Rather than
+// keep chasing native DnD edge cases blindly, this uses Pointer Events
+// instead (the standard, more reliable basis for "sortable list" UIs):
+// pointerdown on the handle starts it, pointermove live-reorders the actual
+// DOM rows via insertBefore (so the list visibly shifts as you drag, not
+// just an insertion-line marker), pointerup reads the final DOM order back
+// out and persists it. Scoped to start only from the grip handle
+// (`.tnum.handle`, which also gets draggable="false" so it can't trigger the
+// row's native drag in parallel) — dragging from elsewhere on the row still
+// does the native whole-row drag onto the sidebar, unaffected.
+function wirePlaylistReorder(container, songs, playlistId) {
+  container.addEventListener('pointerdown', (e) => {
+    if (e.button !== undefined && e.button !== 0) return; // primary button / touch only
+    const handle = e.target.closest('.tnum.handle');
+    if (!handle) return;
+    const row = handle.closest('.trow');
+    if (!row) return;
+    e.preventDefault(); // don't let the browser also start a native drag/text-select
+    row.classList.add('dragging');
+
+    // Listeners go on `window`, not on `row` itself — `onMove` relocates
+    // `row` within the DOM (insertBefore) on every step, and a pointer-
+    // captured element can silently lose that capture in Chrome when it's
+    // moved mid-drag, which stops it from ever receiving the pointerup that
+    // does the actual persist (a real drag would visibly reorder once, then
+    // stop responding, with nothing saved — exactly what was seen before
+    // this fix). window is never itself moved, so it isn't affected.
+    const onMove = (ev) => {
+      const el = document.elementFromPoint(ev.clientX, ev.clientY);
+      const overRow = el && el.closest('.trow');
+      if (!overRow || overRow === row || !container.contains(overRow)) return;
+      const rect = overRow.getBoundingClientRect();
+      const before = ev.clientY < rect.top + rect.height / 2;
+      container.insertBefore(row, before ? overRow : overRow.nextSibling);
+    };
+
+    const onUp = async (ev) => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+      row.classList.remove('dragging');
+
+      // Rows' data-idx never changes during the live drag — it still names
+      // each row's ORIGINAL index into `songs` — so reading the final DOM
+      // order back through it reconstructs the new song order regardless of
+      // how many times the row got moved along the way.
+      const finalOrder = Array.from(container.querySelectorAll('.trow'))
+        .map((r) => songs[Number(r.dataset.idx)]);
+      const changed = finalOrder.some((s, i) => s !== songs[i]);
+      if (!changed) return;
+      try {
+        await api.reorderPlaylist(playlistId, finalOrder.map((s) => s.id), songs.length);
+      } catch { toast('Could not reorder playlist'); }
+      renderPlaylist(playlistId);
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
   });
 }
 
@@ -800,6 +955,49 @@ async function enterApp() {
     e.stopPropagation();
     const a = await api.album(pb.dataset.playAlbum);
     if (a && a.song && a.song.length) player.play(a.song, 0);
+  });
+
+  // Drag an album card (search results, artist page, genre shelves, …) or an
+  // individual track row (album/playlist/search tracklists) onto a playlist
+  // in the sidebar to add it. Survives per-route innerHTML swaps (listener on
+  // #view, not the cards/rows themselves).
+  const DND_ALBUM = 'text/x-maraetai-album';
+  const DND_SONG = 'text/x-maraetai-song';
+  view().addEventListener('dragstart', (e) => {
+    const row = e.target.closest('.trow[data-song-id]');
+    if (row) { e.dataTransfer.setData(DND_SONG, row.dataset.songId); e.dataTransfer.effectAllowed = 'copy'; return; }
+    const card = e.target.closest('.card.album[data-album-id]');
+    if (card) { e.dataTransfer.setData(DND_ALBUM, card.dataset.albumId); e.dataTransfer.effectAllowed = 'copy'; }
+  });
+
+  // Drop target: the sidebar's own playlist list (#sidebar-playlists is a
+  // stable static element — only its children get replaced on re-render — so
+  // wiring here once covers every future renderSidebarPlaylists() call).
+  const splEl = $('#sidebar-playlists');
+  splEl.addEventListener('dragover', (e) => {
+    if (!e.dataTransfer.types.includes(DND_ALBUM) && !e.dataTransfer.types.includes(DND_SONG)) return;
+    const row = e.target.closest('.spl');
+    if (!row) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    row.classList.add('drag-over');
+  });
+  splEl.addEventListener('dragleave', (e) => {
+    const row = e.target.closest('.spl');
+    if (row) row.classList.remove('drag-over');
+  });
+  splEl.addEventListener('drop', (e) => {
+    const row = e.target.closest('.spl');
+    if (!row) return;
+    e.preventDefault();
+    row.classList.remove('drag-over');
+    const m = row.getAttribute('href').match(/^#\/playlist\/(.+)$/);
+    if (!m) return;
+    const playlistId = decodeURIComponent(m[1]);
+    const albumId = e.dataTransfer.getData(DND_ALBUM);
+    const songId = e.dataTransfer.getData(DND_SONG);
+    if (albumId) addAlbumToPlaylist(albumId, playlistId);
+    else if (songId) addSongToPlaylist(songId, playlistId);
   });
 
   // Admin gate + config link-out (best-effort; failures just hide admin).

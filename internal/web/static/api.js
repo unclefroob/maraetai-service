@@ -67,10 +67,13 @@ export function authParams() {
 }
 
 // get calls a Subsonic endpoint and returns its parsed body, throwing on failure.
+// Array values are sent as repeated params (Subsonic's own convention for
+// multi-valued fields like updatePlaylist's songIdToAdd/songIndexToRemove).
 export async function get(path, extra = {}) {
   const params = authParams();
   for (const [k, v] of Object.entries(extra)) {
     if (v === undefined || v === null) continue;
+    if (Array.isArray(v)) { for (const item of v) params.append(k, String(item)); continue; }
     params.set(k, String(v));
   }
   const res = await fetch(`${path}?${params.toString()}`);
@@ -156,6 +159,16 @@ export function updatePlaylist({ playlistId, name, comment, songIdToAdd, songInd
 }
 
 export const deletePlaylist = (id) => get('/rest/deletePlaylist.view', { id });
+
+// reorderPlaylist rewrites a playlist's whole track order in one request.
+// Subsonic has no direct "move track" operation, so the standard way clients
+// implement drag-to-reorder is: remove every current entry by index, then
+// re-add every song id in the desired new order — both in a single
+// updatePlaylist call (songIndexToRemove/songIdToAdd are repeatable params).
+export function reorderPlaylist(playlistId, orderedSongIds, currentCount) {
+  const songIndexToRemove = Array.from({ length: currentCount }, (_, i) => i);
+  return get('/rest/updatePlaylist.view', { playlistId, songIndexToRemove, songIdToAdd: orderedSongIds });
+}
 
 export async function starred() {
   const b = await get('/rest/getStarred2.view');
