@@ -854,21 +854,47 @@ function wirePlaylistReorder(container, songs, playlistId, onReordered) {
   });
 }
 
+// renderSearch: the search box itself lives in the persistent #topbar (see
+// wireTopbarSearch), not here — this just renders results for whatever's
+// currently typed in it, so switching to this route never steals focus from
+// or resets a query someone's mid-typing elsewhere.
 function renderSearch() {
-  view().innerHTML = `
-    <div class="searchbar"><input id="q" type="search" placeholder="Search artists, albums, songs…" autofocus /></div>
-    <div id="results"></div>`;
+  view().innerHTML = '<div id="results"></div>';
+  const q = $('#topbar-search').value.trim();
+  if (q) runSearch(q);
+  else $('#results').innerHTML = '<div class="empty muted">Search for artists, albums, or songs.</div>';
+  $('#topbar-search').focus();
+}
+
+// wireTopbarSearch: called once at boot. Typing anywhere in the app jumps to
+// the search route (if not already there) so results show up under the
+// persistent box, matching the "search bar always visible" behavior of
+// Spotify/Apple Music rather than search being a page you have to open first.
+function wireTopbarSearch() {
+  const input = $('#topbar-search');
+  const clearBtn = $('#topbar-search-clear');
   let timer;
-  $('#q').addEventListener('input', (e) => {
+  const currentRoute = () => (location.hash.replace(/^#\/?/, '') || 'home').split('/')[0];
+  input.addEventListener('input', () => {
+    clearBtn.classList.toggle('hidden', !input.value);
     clearTimeout(timer);
-    const q = e.target.value.trim();
-    timer = setTimeout(() => runSearch(q), 250);
+    timer = setTimeout(() => {
+      if (currentRoute() !== 'search') { location.hash = '#/search'; return; }
+      runSearch(input.value.trim());
+    }, 250);
+  });
+  clearBtn.addEventListener('click', () => {
+    input.value = '';
+    clearBtn.classList.add('hidden');
+    input.focus();
+    if (currentRoute() === 'search') runSearch('');
   });
 }
 
 async function runSearch(q) {
   const out = $('#results');
-  if (!q) { out.innerHTML = ''; return; }
+  if (!out) return; // not on the search route right now — nothing to render into
+  if (!q) { out.innerHTML = '<div class="empty muted">Search for artists, albums, or songs.</div>'; return; }
   out.innerHTML = '<div class="loading">Searching…</div>';
   try {
     const r = await api.search(q);
@@ -956,6 +982,7 @@ async function enterApp() {
   $('#app').classList.remove('hidden');
   $('#who').textContent = api.currentUsername();
   player.init();
+  wireTopbarSearch();
 
   // Delegated hover-play on album cards: fetch the album and play it in place,
   // without navigating. Survives per-route innerHTML swaps (listener on #view).
