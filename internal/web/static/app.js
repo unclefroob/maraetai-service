@@ -746,7 +746,7 @@ async function renderPlaylist(id) {
         el.classList.add('handle');
         el.draggable = false;
       });
-      wirePlaylistReorder(tl, songs, id);
+      wirePlaylistReorder(tl, songs, id, paint);
     }
 
     $('#play-all').addEventListener('click', () => player.play(songs, 0));
@@ -791,7 +791,11 @@ async function renderPlaylist(id) {
 // (`.tnum.handle`, which also gets draggable="false" so it can't trigger the
 // row's native drag in parallel) — dragging from elsewhere on the row still
 // does the native whole-row drag onto the sidebar, unaffected.
-function wirePlaylistReorder(container, songs, playlistId) {
+//
+// onReordered is called after each drag (success or failure) to repaint —
+// NOT renderPlaylist, which would re-fetch and reset edit mode off after
+// every single drag instead of leaving it up to the user to press Done.
+function wirePlaylistReorder(container, songs, playlistId, onReordered) {
   container.addEventListener('pointerdown', (e) => {
     if (e.button !== undefined && e.button !== 0) return; // primary button / touch only
     const handle = e.target.closest('.tnum.handle');
@@ -833,8 +837,15 @@ function wirePlaylistReorder(container, songs, playlistId) {
       if (!changed) return;
       try {
         await api.reorderPlaylist(playlistId, finalOrder.map((s) => s.id), songs.length);
-      } catch { toast('Could not reorder playlist'); }
-      renderPlaylist(playlistId);
+        // Update the in-memory order to match what was just persisted, so
+        // the repaint (still in edit mode) reflects it without a refetch.
+        songs.splice(0, songs.length, ...finalOrder);
+      } catch {
+        toast('Could not reorder playlist');
+        // songs is untouched, so repainting from it snaps the DOM back to
+        // the last-known-good order.
+      }
+      onReordered();
     };
 
     window.addEventListener('pointermove', onMove);
