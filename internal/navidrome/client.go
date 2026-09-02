@@ -258,6 +258,36 @@ func (c *Client) GetSimilarArtists(ctx context.Context, artistID string, count i
 	return ar.Response.ArtistInfo2.SimilarArtist, nil
 }
 
+// User is the subset of Subsonic user info we need (admin check).
+type User struct {
+	Username  string `json:"username"`
+	AdminRole bool   `json:"adminRole"`
+}
+
+type userResponse struct {
+	Response struct {
+		Status string    `json:"status"`
+		User   *User     `json:"user"`
+		Error  *apiError `json:"error"`
+	} `json:"subsonic-response"`
+}
+
+// GetUser returns Subsonic user info for the given username. A user may
+// always look up themselves; looking up someone else requires the caller to
+// be a Navidrome admin, which Navidrome enforces upstream (returns an error
+// otherwise) — this is the same call the web app itself uses to decide
+// whether to show its Admin nav item.
+func (c *Client) GetUser(ctx context.Context, username string, auth url.Values) (*User, error) {
+	var ur userResponse
+	if err := c.get(ctx, "getUser.view", url.Values{"username": {username}}, auth, &ur); err != nil {
+		return nil, err
+	}
+	if ur.Response.Status != "ok" || ur.Response.User == nil {
+		return nil, subsonicError(ur.Response.Error, "getUser")
+	}
+	return ur.Response.User, nil
+}
+
 // get issues an authenticated Subsonic GET and decodes the JSON body into out.
 // `extra` carries endpoint-specific params; the caller passes the originating
 // request's auth params (u, t, s / p, c, v), so this reuses the same credentials.

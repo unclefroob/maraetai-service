@@ -248,7 +248,13 @@ button { font: inherit; cursor: pointer; }
 
 
 /* Admin */
-.admin-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.admin-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+.admin-head-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.admin-user-pick { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
+.admin-user-pick select {
+  background: var(--surface2); border: 1px solid var(--line); color: var(--text);
+  padding: 7px 10px; border-radius: 8px; font: inherit; font-size: 13px;
+}
 .totals { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
 .stat { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 22px; }
 .stat .n { font-size: 26px; font-weight: 700; }

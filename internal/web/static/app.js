@@ -910,32 +910,58 @@ async function runSearch(q) {
   } catch (e) { out.innerHTML = `<div class="error">${esc(e.message)}</div>`; }
 }
 
+// renderAdmin: Wrapped-style totals/top-artists/top-songs/recently-played for
+// one user at a time, defaulting to the admin's own account. The picker lets
+// an admin switch to any other user on the server — /api/stats and
+// getRecentlyPlayed both enforce server-side that only an admin may pass
+// `user=` for someone other than themselves.
 async function renderAdmin() {
   if (!isAdmin) { view().innerHTML = '<div class="empty muted">Admin access required.</div>'; return; }
   loading();
-  const days = 365;
-  const [history, s] = await Promise.all([
-    api.recentlyPlayed(100).catch(() => []),
-    api.stats(days).catch(() => null),
-  ]);
-  const minutes = s ? Math.round((s.totalDurationSeconds || 0) / 60) : 0;
-  const link = navidromeUrl
-    ? `<a class="primary" href="${esc(navidromeUrl)}" target="_blank" rel="noopener">Manage users in Navidrome ↗</a>`
-    : `<span class="muted">Set <code>NAVIDROME_PUBLIC_URL</code> on the service to link here; manage users in Navidrome's own admin UI.</span>`;
-  view().innerHTML = `
-    <div class="admin-head"><h1>Admin</h1>${link}</div>
-    ${s ? `<div class="totals">
-      ${stat(s.totalPlays || 0, 'plays')}
-      ${stat(s.distinctSongs || 0, 'unique songs')}
-      ${stat(minutes.toLocaleString(), 'minutes')}
-    </div>
-    <div class="cols">
-      <div><h3>Top artists</h3><ol class="rank">${rank((s.topArtists || []).map((a) => [a.artist, a.plays]))}</ol></div>
-      <div><h3>Top songs</h3><ol class="rank">${rank((s.topSongs || []).map((t) => [`${t.title} — ${t.artist}`, t.plays]))}</ol></div>
-    </div>` : ''}
-    <h3>Recently played (all users on this server)</h3>
-    <div class="tracklist">${songRowsHTML(history)}</div>`;
-  wireSongRows(view(), history);
+  const me = api.currentUsername();
+  const users = await api.listUsers().catch(() => []);
+  const usernames = users.length ? users.map((u) => u.username) : [me];
+  let selected = usernames.includes(me) ? me : usernames[0];
+
+  const paint = async () => {
+    loading();
+    const days = 365;
+    const [history, s] = await Promise.all([
+      api.recentlyPlayed(100, selected).catch(() => []),
+      api.stats(days, selected).catch(() => null),
+    ]);
+    const minutes = s ? Math.round((s.totalDurationSeconds || 0) / 60) : 0;
+    const link = navidromeUrl
+      ? `<a class="primary" href="${esc(navidromeUrl)}" target="_blank" rel="noopener">Manage users in Navidrome ↗</a>`
+      : `<span class="muted">Set <code>NAVIDROME_PUBLIC_URL</code> on the service to link here; manage users in Navidrome's own admin UI.</span>`;
+    const userOptions = usernames
+      .map((u) => `<option value="${esc(u)}" ${u === selected ? 'selected' : ''}>${esc(u)}${u === me ? ' (you)' : ''}</option>`)
+      .join('');
+    view().innerHTML = `
+      <div class="admin-head">
+        <h1>Admin</h1>
+        <div class="admin-head-actions">
+          <label class="admin-user-pick">Stats for
+            <select id="stats-user">${userOptions}</select>
+          </label>
+          ${link}
+        </div>
+      </div>
+      ${s ? `<div class="totals">
+        ${stat(s.totalPlays || 0, 'plays')}
+        ${stat(s.distinctSongs || 0, 'unique songs')}
+        ${stat(minutes.toLocaleString(), 'minutes')}
+      </div>
+      <div class="cols">
+        <div><h3>Top artists</h3><ol class="rank">${rank((s.topArtists || []).map((a) => [a.artist, a.plays]))}</ol></div>
+        <div><h3>Top songs</h3><ol class="rank">${rank((s.topSongs || []).map((t) => [`${t.title} — ${t.artist}`, t.plays]))}</ol></div>
+      </div>` : ''}
+      <h3>Recently played</h3>
+      <div class="tracklist">${songRowsHTML(history)}</div>`;
+    wireSongRows(view(), history);
+    $('#stats-user').addEventListener('change', (e) => { selected = e.target.value; paint(); });
+  };
+  await paint();
 }
 
 function stat(n, label) { return `<div class="stat"><div class="n">${n}</div><div class="l">${label}</div></div>`; }

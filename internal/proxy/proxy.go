@@ -48,6 +48,7 @@ func New(upstream *url.URL, st *store.Store, navidromePublicURL string, log *slo
 	}
 
 	mux := http.NewServeMux()
+	nd := navidrome.New(upstream)
 
 	// Liveness check for the proxy itself (does not touch Navidrome).
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -72,6 +73,7 @@ func New(upstream *url.URL, st *store.Store, navidromePublicURL string, log *slo
 		recents := &recentsHandler{
 			store: st,
 			auth:  auth.NewValidator(upstream),
+			nd:    nd,
 			log:   log,
 		}
 		mux.Handle("/rest/getRecentlyPlayed", recents)
@@ -97,6 +99,7 @@ func New(upstream *url.URL, st *store.Store, navidromePublicURL string, log *slo
 		mux.Handle("/api/stats", &statsHandler{
 			store: st,
 			auth:  auth.NewValidator(upstream),
+			nd:    nd,
 			log:   log,
 		})
 		mux.Handle("/app/", http.StripPrefix("/app/", web.Handler()))

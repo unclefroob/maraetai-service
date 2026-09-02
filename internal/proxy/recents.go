@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/unclefroob/maraetai-service/internal/auth"
+	"github.com/unclefroob/maraetai-service/internal/navidrome"
 	"github.com/unclefroob/maraetai-service/internal/store"
 	"github.com/unclefroob/maraetai-service/internal/subsonic"
 )
@@ -18,11 +19,13 @@ const (
 
 // recentsHandler serves /rest/getRecentlyPlayed from the play store: the
 // per-song de-duplicated, most-recent-first listen history the Subsonic API
-// doesn't provide. Auth is validated against upstream so only the requesting
-// user's own history is returned.
+// doesn't provide. Auth is validated against upstream, so by default only the
+// requesting user's own history is returned — admins may pass `user=` to see
+// another user's history instead (checked via resolveTargetUser).
 type recentsHandler struct {
 	store *store.Store
 	auth  *auth.Validator
+	nd    *navidrome.Client
 	log   *slog.Logger
 }
 
@@ -43,12 +46,23 @@ func (h *recentsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	target, err := resolveTargetUser(r.Context(), h.nd, q, user)
+	if errors.Is(err, errForbidden) {
+		subsonic.WriteError(w, q, subsonic.ErrUserNotAuthorized, "Admin access required to view another user's history")
+		return
+	}
+	if err != nil {
+		h.log.Error("recents: admin check failed", "caller", user, "err", err)
+		subsonic.WriteError(w, q, subsonic.ErrGeneric, "Authentication unavailable")
+		return
+	}
+
 	count := clampInt(q.Get("count"), defaultRecentCount, 1, maxRecentCount)
 	offset := clampInt(q.Get("offset"), 0, 0, 1<<31-1)
 
-	plays, err := h.store.RecentlyPlayedDistinct(r.Context(), user, count, offset)
+	plays, err := h.store.RecentlyPlayedDistinct(r.Context(), target, count, offset)
 	if err != nil {
-		h.log.Error("recents: query failed", "user", user, "err", err)
+		h.log.Error("recents: query failed", "user", target, "err", err)
 		subsonic.WriteError(w, q, subsonic.ErrGeneric, "Could not load play history")
 		return
 	}

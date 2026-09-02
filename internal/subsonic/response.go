@@ -18,9 +18,10 @@ const (
 
 // Subsonic error codes used here.
 const (
-	ErrGeneric          = 0
-	ErrRequiredParam    = 10
-	ErrWrongCredentials = 40
+	ErrGeneric           = 0
+	ErrRequiredParam     = 10
+	ErrWrongCredentials  = 40
+	ErrUserNotAuthorized = 50
 )
 
 // Child mirrors the Subsonic "Child" object for a song, plus a non-standard

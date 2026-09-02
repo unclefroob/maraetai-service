@@ -223,9 +223,17 @@ export async function songsForYou(count = 20) {
   const b = await get('/rest/getSongsForYou.view', { count });
   return (b.songsForYou && b.songsForYou.song) || [];
 }
-export async function recentlyPlayed(count = 50) {
-  const b = await get('/rest/getRecentlyPlayed.view', { count });
+// forUser is admin-only: viewing another user's history, enforced server-side.
+export async function recentlyPlayed(count = 50, forUser) {
+  const b = await get('/rest/getRecentlyPlayed.view', { count, user: forUser });
   return (b.recentlyPlayed && b.recentlyPlayed.song) || [];
+}
+
+// listUsers returns every user on the server (admin-only, enforced upstream
+// by Navidrome — used to populate the admin panel's per-user stats picker).
+export async function listUsers() {
+  const b = await get('/rest/getUsers.view');
+  return (b.users && b.users.user) || [];
 }
 
 // scrobble: submission=true records a completed play (tee'd into the store);
@@ -248,8 +256,12 @@ export async function lyrics(id) {
   }
 }
 
-export async function stats(days) {
-  const res = await fetch(`/api/stats?${authParams().toString()}&days=${days}`);
+// forUser is admin-only: viewing another user's stats, enforced server-side.
+export async function stats(days, forUser) {
+  const params = authParams();
+  params.set('days', String(days));
+  if (forUser) params.set('user', forUser);
+  const res = await fetch(`/api/stats?${params.toString()}`);
   if (!res.ok) throw new Error(`stats failed (${res.status})`);
   return res.json();
 }

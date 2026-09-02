@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/unclefroob/maraetai-service/internal/auth"
+	"github.com/unclefroob/maraetai-service/internal/navidrome"
 	"github.com/unclefroob/maraetai-service/internal/store"
 )
 
@@ -16,12 +17,14 @@ const (
 	maxStatsDays     = 3650
 )
 
-// statsHandler serves /api/stats: a Wrapped-style JSON summary of the
-// authenticated user's listening. This is the service's own JSON API (not
-// Subsonic-shaped) and backs the SPA's stats view.
+// statsHandler serves /api/stats: a Wrapped-style JSON summary of a user's
+// listening — the authenticated caller by default, or (admins only) another
+// user via `?user=`. This is the service's own JSON API (not Subsonic-shaped)
+// and backs the SPA's admin/stats view.
 type statsHandler struct {
 	store *store.Store
 	auth  *auth.Validator
+	nd    *navidrome.Client
 	log   *slog.Logger
 }
 
@@ -46,12 +49,23 @@ func (h *statsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	target, err := resolveTargetUser(r.Context(), h.nd, q, user)
+	if errors.Is(err, errForbidden) {
+		writeJSON(w, http.StatusForbidden, statsError{"admin access required to view another user's stats"})
+		return
+	}
+	if err != nil {
+		h.log.Error("stats: admin check failed", "caller", user, "err", err)
+		writeJSON(w, http.StatusBadGateway, statsError{"authentication unavailable"})
+		return
+	}
+
 	days := clampInt(q.Get("days"), defaultStatsDays, 1, maxStatsDays)
 	since := time.Now().AddDate(0, 0, -days)
 
-	st, err := h.store.Stats(r.Context(), user, since, 10)
+	st, err := h.store.Stats(r.Context(), target, since, 10)
 	if err != nil {
-		h.log.Error("stats: query failed", "user", user, "err", err)
+		h.log.Error("stats: query failed", "user", target, "err", err)
 		writeJSON(w, http.StatusInternalServerError, statsError{"could not load stats"})
 		return
 	}
