@@ -21,6 +21,10 @@ COPY --from=build --chown=65532:65532 /data /data
 # against the container's working dir — NOT a mounted /data — so the DB would
 # land in the ephemeral layer and be lost on container recreate.
 ENV DB_PATH=/data/maraetai.db
+# Same reasoning as DB_PATH above: the config default (./data/videos) resolves
+# against the container's working dir, not the mounted /data — this makes the
+# absolute, mount-backed path the default in the shipped image.
+ENV VIDEOS_DIR=/data/videos
 EXPOSE 4534
 # The binary checks its own /healthz (no shell/curl in distroless).
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
