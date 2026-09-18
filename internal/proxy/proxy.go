@@ -97,6 +97,19 @@ func New(upstream *url.URL, st *store.Store, navidromePublicURL string, videosDi
 		mux.Handle("/rest/getSongsForYou", songsForYou)
 		mux.Handle("/rest/getSongsForYou.view", songsForYou)
 
+		// getUsers: Navidrome's own implementation only ever returns the
+		// caller, so for an admin this merges in every username known to the
+		// local play store (see usersHandler) — otherwise the admin web UI's
+		// per-user stats picker has no one else to offer.
+		users := &usersHandler{
+			store: st,
+			auth:  auth.NewValidator(upstream),
+			nd:    nd,
+			log:   log,
+		}
+		mux.Handle("/rest/getUsers", users)
+		mux.Handle("/rest/getUsers.view", users)
+
 		// M4: JSON stats API + the embedded SPA that consumes it (and the
 		// recents endpoint above). The SPA lives at /app/ so it never shadows
 		// the Subsonic surface forwarded to Navidrome.

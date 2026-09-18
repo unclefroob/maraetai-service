@@ -187,3 +187,43 @@ func TestOnRepeat(t *testing.T) {
 		t.Errorf("second = %s (%d plays), want C (3)", got[1].SongID, got[1].Plays)
 	}
 }
+
+func TestDistinctUsersDedupsAndOrders(t *testing.T) {
+	st := newStore(t)
+	ctx := context.Background()
+	now := time.Unix(1700000000, 0).UTC()
+
+	mustInsert := func(user, song string) {
+		if err := st.InsertPlay(ctx, Play{User: user, SongID: song, PlayedAt: now}); err != nil {
+			t.Fatalf("insert: %v", err)
+		}
+	}
+	mustInsert("bob", "s1")
+	mustInsert("alice", "s1")
+	mustInsert("alice", "s2") // second play by alice — must not duplicate her in the result
+
+	got, err := st.DistinctUsers(ctx)
+	if err != nil {
+		t.Fatalf("distinct users: %v", err)
+	}
+	want := []string{"alice", "bob"}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for i, u := range want {
+		if got[i] != u {
+			t.Errorf("got[%d] = %q, want %q (got %v)", i, got[i], u, got)
+		}
+	}
+}
+
+func TestDistinctUsersEmptyStore(t *testing.T) {
+	st := newStore(t)
+	got, err := st.DistinctUsers(context.Background())
+	if err != nil {
+		t.Fatalf("distinct users: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("want no users on an empty store, got %v", got)
+	}
+}
