@@ -58,6 +58,7 @@
 
     <!-- Now playing bar -->
     <footer id="player" class="player hidden">
+      <div id="np-ambient" class="np-ambient"></div>
       <div class="np-meta">
         <img id="np-art" alt="" />
         <div class="np-text">
@@ -89,13 +90,13 @@
     </footer>
 
     <!-- Queue panel (anchored above the player bar) -->
-    <div id="queue-panel" class="queue-panel hidden">
+    <div id="queue-panel" class="queue-panel">
       <div class="qp-head"><span>Queue</span><button id="qp-clear" class="ghost">Clear</button></div>
       <div id="qp-list" class="qp-list"></div>
     </div>
 
     <!-- Lyrics overlay -->
-    <div id="lyrics-modal" class="modal hidden">
+    <div id="lyrics-modal" class="modal">
       <div class="modal-card">
         <div class="modal-head">
           <span id="ly-title" class="np-title"></span>
