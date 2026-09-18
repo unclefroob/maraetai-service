@@ -33,7 +33,7 @@ let startedAtMs = 0;    // play-start time for the scrobble `time` stamp
 let scrobbled = false;  // crossed the listen threshold this track?
 let lyricsData = null;  // { synced, line: [{ start, value }] } for the current track
 
-let audio, art, titleEl, artistEl, starBtn, playBtn, progress, curEl, durEl, volEl, bar;
+let audio, art, ambientEl, titleEl, artistEl, starBtn, playBtn, progress, curEl, durEl, volEl, bar;
 let shuffleBtn, repeatBtn, queueBtn, lyricsBtn, queuePanel, qpList, lyricsModal, lyBody, lyTitle;
 
 function fmt(sec) {
@@ -139,6 +139,7 @@ function restore() {
   const seek = p ? (Number(p.t) || 0) : 0;
   if (seek > 0) audio.addEventListener('loadedmetadata', () => { try { audio.currentTime = seek; } catch {} }, { once: true });
   renderBar(track);
+  setAmbient(track);
   bar.classList.remove('hidden');
 
   shuffleBtn.classList.toggle('on', shuffleOn);
@@ -207,10 +208,11 @@ function loadCurrent() {
   lyricsData = null;
   beginTrack();
   renderBar(track);
+  setAmbient(track);
   bar.classList.remove('hidden');
   renderQueue();
   savePosition(); // index moved; queue itself is unchanged
-  if (!lyricsModal.classList.contains('hidden')) loadLyrics();
+  if (lyricsModal.classList.contains('open')) loadLyrics();
 }
 
 export function togglePlay() {
@@ -282,6 +284,23 @@ function renderBar(track) {
   setStarred(!!track.starred);
 }
 
+// setAmbient crossfades the now-playing bar's blurred backdrop to the new
+// track's art. Reuses the same size/URL as #np-art so the browser's image
+// cache serves it — no extra network request for the ambient copy.
+function setAmbient(track) {
+  if (!ambientEl) return;
+  if (!track || !track.coverArt) { ambientEl.classList.remove('show'); return; }
+  const url = api.coverArtURL(track.coverArt, 96);
+  ambientEl.classList.remove('show');
+  const img = new Image();
+  img.onload = () => {
+    ambientEl.style.backgroundImage = `url("${url}")`;
+    requestAnimationFrame(() => ambientEl.classList.add('show'));
+  };
+  img.onerror = () => { ambientEl.style.backgroundImage = ''; };
+  img.src = url;
+}
+
 function setStarred(on) {
   starBtn.textContent = on ? '♥' : '♡';
   starBtn.classList.toggle('on', on);
@@ -304,7 +323,7 @@ async function toggleStar() {
 // --- queue panel --------------------------------------------------------
 
 function renderQueue() {
-  if (queuePanel.classList.contains('hidden')) return;
+  if (!queuePanel.classList.contains('open')) return;
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   qpList.innerHTML = queue.map((t, i) => `
@@ -341,9 +360,10 @@ function removeAt(i) {
 }
 
 function toggleQueue() {
-  queuePanel.classList.toggle('hidden');
-  queueBtn.classList.toggle('on', !queuePanel.classList.contains('hidden'));
-  renderQueue();
+  const opening = !queuePanel.classList.contains('open');
+  queuePanel.classList.toggle('open', opening);
+  queueBtn.classList.toggle('on', opening);
+  if (opening) renderQueue();
 }
 
 // --- lyrics -------------------------------------------------------------
@@ -362,13 +382,14 @@ async function loadLyrics() {
 }
 
 function toggleLyrics() {
-  lyricsModal.classList.toggle('hidden');
-  lyricsBtn.classList.toggle('on', !lyricsModal.classList.contains('hidden'));
-  if (!lyricsModal.classList.contains('hidden')) loadLyrics();
+  const opening = !lyricsModal.classList.contains('open');
+  lyricsModal.classList.toggle('open', opening);
+  lyricsBtn.classList.toggle('on', opening);
+  if (opening) loadLyrics();
 }
 
 function syncLyrics() {
-  if (!lyricsData || !lyricsData.synced || lyricsModal.classList.contains('hidden')) return;
+  if (!lyricsData || !lyricsData.synced || !lyricsModal.classList.contains('open')) return;
   const lines = lyricsData.line || [];
   const ms = audio.currentTime * 1000;
   let active = -1;
@@ -404,7 +425,7 @@ function onTimeUpdate() {
 
 export function init() {
   audio = $('#audio'); bar = $('#player');
-  art = $('#np-art'); titleEl = $('#np-title'); artistEl = $('#np-artist'); starBtn = $('#np-star');
+  art = $('#np-art'); ambientEl = $('#np-ambient'); titleEl = $('#np-title'); artistEl = $('#np-artist'); starBtn = $('#np-star');
   playBtn = $('#np-play'); progress = $('#np-progress'); curEl = $('#np-cur'); durEl = $('#np-dur'); volEl = $('#np-vol');
   shuffleBtn = $('#np-shuffle'); repeatBtn = $('#np-repeat'); queueBtn = $('#np-queue'); lyricsBtn = $('#np-lyrics');
   queuePanel = $('#queue-panel'); qpList = $('#qp-list');
@@ -428,7 +449,7 @@ export function init() {
   repeatBtn.addEventListener('click', cycleRepeat);
   queueBtn.addEventListener('click', toggleQueue);
   lyricsBtn.addEventListener('click', toggleLyrics);
-  $('#qp-clear').addEventListener('click', () => { baseQueue = []; queue = []; index = -1; audio.pause(); audio.removeAttribute('src'); bar.classList.add('hidden'); renderQueue(); saveQueue(); });
+  $('#qp-clear').addEventListener('click', () => { baseQueue = []; queue = []; index = -1; audio.pause(); audio.removeAttribute('src'); bar.classList.add('hidden'); setAmbient(null); renderQueue(); saveQueue(); });
   $('#ly-close').addEventListener('click', toggleLyrics);
 
   audio.addEventListener('play', () => {

@@ -136,6 +136,25 @@ function toast(msg) {
 
 // --- modal dialogs ------------------------------------------------------
 
+// openModal/closeModal drive the .modal open/close transition (see styles.css)
+// for the ad-hoc dialogs below — append, then flip .open a frame later so the
+// entrance actually transitions instead of snapping in; on close, wait out the
+// transition before removing the node so it fades/scales away instead of
+// vanishing instantly.
+function openModal(overlay, focusEl) {
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    overlay.classList.add('open');
+    // Must focus only once .open lifts `visibility: hidden` — an element with
+    // a hidden ancestor can't take focus, so focusing before this frame is a no-op.
+    if (focusEl) { focusEl.focus(); if (typeof focusEl.select === 'function') focusEl.select(); }
+  }));
+}
+function closeModal(overlay) {
+  overlay.classList.remove('open');
+  setTimeout(() => overlay.remove(), 200);
+}
+
 // promptDialog: single text field. Resolves to the trimmed value, or null if cancelled.
 function promptDialog(title, value = '', okLabel = 'Save') {
   return new Promise((resolve) => {
@@ -151,15 +170,14 @@ function promptDialog(title, value = '', okLabel = 'Save') {
           </div>
         </div>
       </div>`;
-    document.body.appendChild(overlay);
-    const done = (v) => { overlay.remove(); resolve(v); };
+    const inp = overlay.querySelector('.pick-name');
+    openModal(overlay, inp);
+    const done = (v) => { closeModal(overlay); resolve(v); };
     overlay.addEventListener('click', (e) => { if (e.target === overlay) done(null); });
     overlay.querySelector('[data-x]').addEventListener('click', () => done(null));
     const submit = () => done(overlay.querySelector('.pick-name').value.trim() || null);
     overlay.querySelector('[data-ok]').addEventListener('click', submit);
-    const inp = overlay.querySelector('.pick-name');
     inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); else if (e.key === 'Escape') done(null); });
-    inp.focus(); inp.select();
   });
 }
 
@@ -179,8 +197,8 @@ function confirmDialog(title, body, okLabel = 'OK') {
           </div>
         </div>
       </div>`;
-    document.body.appendChild(overlay);
-    const done = (v) => { overlay.remove(); resolve(v); };
+    openModal(overlay);
+    const done = (v) => { closeModal(overlay); resolve(v); };
     overlay.addEventListener('click', (e) => { if (e.target === overlay) done(false); });
     overlay.querySelector('[data-x]').addEventListener('click', () => done(false));
     overlay.querySelector('[data-cancel]').addEventListener('click', () => done(false));
@@ -209,8 +227,9 @@ async function addToPlaylistDialog(song) {
         </div>
       </div>
     </div>`;
-  document.body.appendChild(overlay);
-  const close = () => overlay.remove();
+  const nameInp = overlay.querySelector('.pick-name');
+  openModal(overlay, nameInp);
+  const close = () => closeModal(overlay);
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
   overlay.querySelector('[data-x]').addEventListener('click', close);
   overlay.querySelectorAll('.pick-row').forEach((b) => b.addEventListener('click', async () => {
@@ -227,9 +246,7 @@ async function addToPlaylistDialog(song) {
     } catch { toast('Could not create playlist'); }
   };
   overlay.querySelector('[data-new]').addEventListener('click', create);
-  const inp = overlay.querySelector('.pick-name');
-  inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') create(); });
-  inp.focus();
+  nameInp.addEventListener('keydown', (e) => { if (e.key === 'Enter') create(); });
 }
 
 // addAlbumToPlaylist: drag-and-drop target for an album card dropped onto a
@@ -304,7 +321,28 @@ function fmtDur(sec) {
   return `${m}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
 }
 
-function loading() { view().innerHTML = '<div class="loading">Loading…</div>'; }
+// Skeleton placeholders (shimmer, see styles.css) shown while a view's data is
+// still in flight, instead of a bare "Loading…" string.
+function skeletonCards(n = 6) {
+  return `<div class="grid">${Array.from({ length: n }, () => `
+    <div class="card">
+      <div class="skeleton skel-art"></div>
+      <div class="skeleton skel-line" style="width:70%"></div>
+      <div class="skeleton skel-line" style="width:45%;margin-top:6px"></div>
+    </div>`).join('')}</div>`;
+}
+function skeletonRows(n = 8) {
+  return `<div class="tracklist">${Array.from({ length: n }, () => `
+    <div class="trow">
+      <div class="skeleton skel-line skel-num"></div>
+      <div class="tmeta">
+        <div class="skeleton skel-line" style="width:60%"></div>
+        <div class="skeleton skel-line" style="width:35%;margin-top:6px"></div>
+      </div>
+    </div>`).join('')}</div>`;
+}
+
+function loading() { view().innerHTML = skeletonCards(); }
 function fail(e) { view().innerHTML = `<div class="error">${esc(e.message || e)}</div>`; }
 
 // --- views --------------------------------------------------------------
@@ -488,7 +526,7 @@ async function renderLibrary() {
   view().querySelectorAll('[data-lib]').forEach((b) =>
     b.addEventListener('click', () => { libTab = b.dataset.lib; renderLibrary(); }));
   const body = $('#lib-body');
-  body.innerHTML = '<div class="loading">Loading…</div>';
+  body.innerHTML = libTab === 'albums' ? skeletonCards(8) : skeletonRows(8);
   try {
     if (libTab === 'albums') {
       const albums = await api.albumList('alphabeticalByName', 100);
@@ -528,7 +566,7 @@ async function renderGenre(name) {
   view().querySelectorAll('[data-gt]').forEach((b) =>
     b.addEventListener('click', () => { genreTab = b.dataset.gt; renderGenre(name); }));
   const body = $('#genre-body');
-  body.innerHTML = '<div class="loading">Loading…</div>';
+  body.innerHTML = genreTab === 'albums' ? skeletonCards(8) : skeletonRows(8);
   try {
     if (genreTab === 'albums') {
       const albums = await api.albumsByGenre(name);
@@ -555,7 +593,7 @@ async function renderMyMusic() {
   view().querySelectorAll('[data-mm]').forEach((b) =>
     b.addEventListener('click', () => { myMusicTab = b.dataset.mm; renderMyMusic(); }));
   const body = $('#mm-body');
-  body.innerHTML = '<div class="loading">Loading…</div>';
+  body.innerHTML = skeletonRows(8);
   try {
     const songs = myMusicTab === 'favourites'
       ? (await api.starred()).song || []
@@ -895,7 +933,7 @@ async function runSearch(q) {
   const out = $('#results');
   if (!out) return; // not on the search route right now — nothing to render into
   if (!q) { out.innerHTML = '<div class="empty muted">Search for artists, albums, or songs.</div>'; return; }
-  out.innerHTML = '<div class="loading">Searching…</div>';
+  out.innerHTML = skeletonRows(5);
   try {
     const r = await api.search(q);
     const parts = [];
@@ -985,9 +1023,6 @@ function route() {
   clearHero(); // stop the Home hero rotation when leaving Home
   const hash = location.hash.replace(/^#\/?/, '') || 'home';
   const [name, arg] = hash.split('/');
-  for (const b of document.querySelectorAll('[data-route]')) {
-    b.classList.toggle('active', b.dataset.route === name);
-  }
   const run = {
     home: renderHome, library: renderLibrary, search: renderSearch,
     mymusic: renderMyMusic, playlists: renderPlaylists, admin: renderAdmin,
@@ -997,7 +1032,21 @@ function route() {
     playlist: () => renderPlaylist(decodeURIComponent(arg)),
     genre: () => renderGenre(decodeURIComponent(arg)),
   }[name] || renderHome;
-  Promise.resolve(run()).catch(fail);
+
+  // Enter the new view (nav highlight + the synchronous skeleton/shell each
+  // render function sets before its data fetch resolves) inside a View
+  // Transition so leaving the old route crossfades instead of hard-cutting.
+  // The transition only covers this synchronous part — run()'s async data
+  // fetch continues after, unaffected (a transition's callback must resolve
+  // quickly; wrapping the fetch itself would freeze the page while it loads).
+  const enter = () => {
+    for (const b of document.querySelectorAll('[data-route]')) {
+      b.classList.toggle('active', b.dataset.route === name);
+    }
+    Promise.resolve(run()).catch(fail);
+  };
+  if (document.startViewTransition) document.startViewTransition(enter);
+  else enter();
 }
 
 // --- auth / boot --------------------------------------------------------
