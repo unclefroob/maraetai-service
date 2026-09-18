@@ -22,7 +22,7 @@ func buildProxy(t *testing.T, upstreamURL, navidromePublicURL string) http.Handl
 	}
 	t.Cleanup(func() { _ = st.Close() })
 	u, _ := url.Parse(upstreamURL)
-	return New(u, st, navidromePublicURL, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	return New(u, st, navidromePublicURL, "", slog.New(slog.NewTextHandler(io.Discard, nil)))
 }
 
 func TestServesWebApp(t *testing.T) {

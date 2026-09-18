@@ -78,12 +78,7 @@ func (h *songsForYouHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Auth params reused for upstream content calls.
-	authParams := url.Values{}
-	for _, k := range []string{"u", "t", "s", "p", "c", "v"} {
-		if v := q.Get(k); v != "" {
-			authParams.Set(k, v)
-		}
-	}
+	reqAuthParams := authParams(q)
 
 	key := user + "|" + date + "|" + strconv.Itoa(count)
 	h.mu.Lock()
@@ -95,7 +90,7 @@ func (h *songsForYouHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	seed := int64(hashSeed(user + "|" + date))
-	mix := h.build(r.Context(), user, authParams, count, seed)
+	mix := h.build(r.Context(), user, reqAuthParams, count, seed)
 
 	h.mu.Lock()
 	// Bound cache growth: a new day's key replaces, but cap total entries.

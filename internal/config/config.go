@@ -16,6 +16,9 @@ type Config struct {
 	NavidromeURL *url.URL
 	// DBPath is the path to the SQLite play-history database.
 	DBPath string
+	// VideosDir is where curated background-video clips live, named
+	// <songId>.mp4 / <albumId>.mp4, served by getTrackVideo.
+	VideosDir string
 	// NavidromePublicURL is the browser-reachable Navidrome URL, surfaced to the
 	// web app's admin section for the "manage users in Navidrome" link-out.
 	// Optional — the admin UI shows guidance when it's empty.
@@ -49,10 +52,16 @@ func Load() (*Config, error) {
 		dbPath = "./data/maraetai.db"
 	}
 
+	videosDir := strings.TrimSpace(os.Getenv("VIDEOS_DIR"))
+	if videosDir == "" {
+		videosDir = "./data/videos"
+	}
+
 	return &Config{
 		ListenAddr:         addr,
 		NavidromeURL:       u,
 		DBPath:             dbPath,
+		VideosDir:          videosDir,
 		NavidromePublicURL: strings.TrimSpace(os.Getenv("NAVIDROME_PUBLIC_URL")),
 	}, nil
 }
