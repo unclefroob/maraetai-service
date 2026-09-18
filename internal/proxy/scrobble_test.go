@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -102,6 +103,15 @@ func fakeNavidrome(t *testing.T, scrobbleHits *int32) *httptest.Server {
 				{"id":"ar2","name":"Avril","coverArt":"c2","albumCount":5}]},
 			{"name":"M","artist":[
 				{"id":"ar3","name":"Massive Attack","coverArt":"c3","albumCount":4}]}]}}}`)
+	})
+	// getUser: "admin" is the only test-fixture username with adminRole —
+	// used by tests exercising the admin-only paths (resolveTargetUser,
+	// isAdmin/getUsers).
+	mux.HandleFunc("/rest/getUser.view", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		username := r.URL.Query().Get("username")
+		_, _ = fmt.Fprintf(w, `{"subsonic-response":{"status":"ok","user":{"username":%q,"adminRole":%v}}}`,
+			username, username == "admin")
 	})
 	// ping for forward-and-validate auth: bad token => failed status (200).
 	mux.HandleFunc("/rest/ping.view", func(w http.ResponseWriter, r *http.Request) {

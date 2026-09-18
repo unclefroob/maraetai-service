@@ -90,6 +90,18 @@ type ArtistsPage struct {
 	Artist []Artist `xml:"artist" json:"artist,omitempty"`
 }
 
+// User is a minimal Subsonic user record for the getUsers response — just the
+// username, since the proxy only ever learns other users' names (not their
+// roles/quotas) from local play history.
+type User struct {
+	Username string `xml:"username,attr" json:"username"`
+}
+
+// Users is the container for the getUsers response.
+type Users struct {
+	User []User `xml:"user" json:"user,omitempty"`
+}
+
 type apiError struct {
 	Code    int    `xml:"code,attr" json:"code"`
 	Message string `xml:"message,attr" json:"message"`
@@ -109,6 +121,7 @@ type body struct {
 	SongsForYou    *SongsForYou    `xml:"songsForYou,omitempty" json:"songsForYou,omitempty"`
 	Favourites     *Favourites     `xml:"favourites,omitempty" json:"favourites,omitempty"`
 	ArtistsPage    *ArtistsPage    `xml:"artistList,omitempty" json:"artistList,omitempty"`
+	Users          *Users          `xml:"users,omitempty" json:"users,omitempty"`
 }
 
 type xmlEnvelope struct {
@@ -149,6 +162,15 @@ func WriteFavourites(w http.ResponseWriter, q url.Values, songs []Child) {
 // WriteArtistList writes a successful getArtistList response (one page).
 func WriteArtistList(w http.ResponseWriter, q url.Values, artists []Artist) {
 	write(w, q, body{ArtistsPage: &ArtistsPage{Artist: artists}})
+}
+
+// WriteUsers writes a successful getUsers response.
+func WriteUsers(w http.ResponseWriter, q url.Values, usernames []string) {
+	users := make([]User, len(usernames))
+	for i, u := range usernames {
+		users[i] = User{Username: u}
+	}
+	write(w, q, body{Users: &Users{User: users}})
 }
 
 // WriteError writes a Subsonic error response. Note: Subsonic conveys errors in

@@ -411,6 +411,28 @@ func (s *Store) RecentSongIDs(ctx context.Context, user string, since time.Time)
 	return out, rows.Err()
 }
 
+// DistinctUsers returns every username with at least one recorded play,
+// alphabetically. This is the proxy's own source of truth for "who has used
+// this service" — Navidrome's own getUsers.view (unlike the wider Subsonic
+// spec) only ever returns the caller themselves, not the full user list.
+func (s *Store) DistinctUsers(ctx context.Context) ([]string, error) {
+	const q = `SELECT DISTINCT user FROM plays ORDER BY user`
+	rows, err := s.db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("query distinct users: %w", err)
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var u string
+		if err := rows.Scan(&u); err != nil {
+			return nil, fmt.Errorf("scan distinct users: %w", err)
+		}
+		out = append(out, u)
+	}
+	return out, rows.Err()
+}
+
 // Close closes the underlying database.
 func (s *Store) Close() error {
 	return s.db.Close()
