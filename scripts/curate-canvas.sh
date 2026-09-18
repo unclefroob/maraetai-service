@@ -123,13 +123,21 @@ else
     exit 1
   fi
 
+  # xfade requires its two inputs to carry an explicit constant frame rate on
+  # the filter link — trim+setpts alone doesn't guarantee that (real-world
+  # sources, e.g. an AV1 music video, can leave it unset even though the
+  # source itself is CFR), which fails with "needs to be a constant frame
+  # rate; current rate of 1/0 is invalid". Stamp it explicitly with the
+  # trimmed clip's own rate rather than hardcoding one.
+  FPS="$(ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate -of csv=p=0 "$TMP_TRIMMED")"
+
   # Seamless-loop crossfade: blend the clip's own tail into its own head
   # (duration XFADE), then concat that blended join with the untouched
   # middle section. The result loops with no visible cut at the seam.
   echo "==> Crossfading ${XFADE}s tail-into-head for a seamless loop..."
   ffmpeg -y -loglevel error -i "$TMP_TRIMMED" -filter_complex "
-    [0:v]trim=0:${XFADE},setpts=PTS-STARTPTS[head];
-    [0:v]trim=${REM}:${DURATION},setpts=PTS-STARTPTS[tail];
+    [0:v]trim=0:${XFADE},setpts=PTS-STARTPTS,fps=${FPS}[head];
+    [0:v]trim=${REM}:${DURATION},setpts=PTS-STARTPTS,fps=${FPS}[tail];
     [tail][head]xfade=transition=fade:duration=${XFADE}:offset=0[joined];
     [0:v]trim=${XFADE}:${REM},setpts=PTS-STARTPTS[mid];
     [joined][mid]concat=n=2:v=1:a=0[out]
