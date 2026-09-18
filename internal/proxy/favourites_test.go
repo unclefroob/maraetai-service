@@ -15,7 +15,8 @@ type favouritesJSON struct {
 		} `json:"error"`
 		Favourites struct {
 			Song []struct {
-				ID string `json:"id"`
+				ID       string `json:"id"`
+				ArtistID string `json:"artistId"`
 			} `json:"song"`
 		} `json:"favourites"`
 	} `json:"subsonic-response"`
@@ -55,6 +56,11 @@ func TestGetFavouritesPages(t *testing.T) {
 	p0 := fetchFavourites(t, srv.URL, "u=alice&t=good&s=salt&offset=0&count=2&f=json")
 	if got := ids(p0); len(got) != 2 || got[0] != "fav1" || got[1] != "fav2" {
 		t.Fatalf("page 0 = %v, want [fav1 fav2]", got)
+	}
+	// Regression: getFavourites's Child previously carried no artistId at
+	// all, so "Go to Artist" silently failed for anything surfaced through it.
+	if got := p0.Response.Favourites.Song[0].ArtistID; got != "art-fave" {
+		t.Errorf("artistId = %q, want art-fave", got)
 	}
 	p1 := fetchFavourites(t, srv.URL, "u=alice&t=good&s=salt&offset=2&count=2&f=json")
 	if got := ids(p1); len(got) != 1 || got[0] != "fav3" {

@@ -20,6 +20,7 @@ type onRepeatJSON struct {
 		OnRepeat struct {
 			Song []struct {
 				ID        string `json:"id"`
+				ArtistID  string `json:"artistId"`
 				PlayCount int    `json:"playCount"`
 			} `json:"song"`
 		} `json:"onRepeat"`
@@ -35,16 +36,17 @@ func TestGetOnRepeatRanksByPlayCount(t *testing.T) {
 	defer srv.Close()
 
 	now := time.Now().UTC()
-	ins := func(song string, n int) {
+	ins := func(song, artistID string, n int) {
 		for i := 0; i < n; i++ {
 			_ = st.InsertPlay(context.Background(), store.Play{
-				User: "alice", SongID: song, PlayedAt: now.Add(-time.Duration(i) * time.Minute), Title: song,
+				User: "alice", SongID: song, ArtistID: artistID,
+				PlayedAt: now.Add(-time.Duration(i) * time.Minute), Title: song,
 			})
 		}
 	}
-	ins("hit", 5)  // on repeat
-	ins("mid", 3)  // on repeat (== threshold)
-	ins("once", 1) // below threshold
+	ins("hit", "art-hit", 5)   // on repeat
+	ins("mid", "art-mid", 3)   // on repeat (== threshold)
+	ins("once", "art-once", 1) // below threshold
 
 	resp, err := http.Get(srv.URL + "/rest/getOnRepeat.view?u=alice&t=good&s=salt&f=json")
 	if err != nil {
@@ -68,6 +70,14 @@ func TestGetOnRepeatRanksByPlayCount(t *testing.T) {
 	}
 	if songs[1].ID != "mid" || songs[1].PlayCount != 3 {
 		t.Errorf("second = %+v, want mid/3", songs[1])
+	}
+	// Regression: getOnRepeat's Child previously carried no artistId at all,
+	// so "Go to Artist" silently failed for anything surfaced through it.
+	if songs[0].ArtistID != "art-hit" {
+		t.Errorf("first artistId = %q, want art-hit", songs[0].ArtistID)
+	}
+	if songs[1].ArtistID != "art-mid" {
+		t.Errorf("second artistId = %q, want art-mid", songs[1].ArtistID)
 	}
 }
 

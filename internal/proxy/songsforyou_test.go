@@ -19,9 +19,10 @@ type songsForYouJSON struct {
 		} `json:"error"`
 		SongsForYou struct {
 			Song []struct {
-				ID     string `json:"id"`
-				Artist string `json:"artist"`
-				Reason string `json:"reason"`
+				ID       string `json:"id"`
+				Artist   string `json:"artist"`
+				ArtistID string `json:"artistId"`
+				Reason   string `json:"reason"`
 			} `json:"song"`
 		} `json:"songsForYou"`
 	} `json:"subsonic-response"`
@@ -72,6 +73,12 @@ func TestGetSongsForYouPersonalized(t *testing.T) {
 	for _, s := range songs {
 		if s.Reason == "" {
 			t.Errorf("song %s missing reason", s.ID)
+		}
+		// Regression: getSongsForYou's Child previously carried no artistId
+		// at all, so "Go to Artist" silently failed for anything surfaced
+		// through it.
+		if s.ArtistID == "" {
+			t.Errorf("song %s missing artistId", s.ID)
 		}
 		switch {
 		case s.Artist == "Massive Attack" || s.Artist == "Portishead":

@@ -75,6 +75,7 @@ func (h *recentsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			Title:       p.Title,
 			Album:       p.Album,
 			Artist:      p.Artist,
+			ArtistID:    p.ArtistID,
 			AlbumID:     p.AlbumID,
 			CoverArt:    p.CoverArt,
 			Duration:    p.Duration,

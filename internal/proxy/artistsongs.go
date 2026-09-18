@@ -89,6 +89,7 @@ func songToChild(s navidrome.Song) subsonic.Child {
 		Title:       s.Title,
 		Album:       s.Album,
 		Artist:      s.Artist,
+		ArtistID:    s.ArtistID,
 		AlbumID:     s.AlbumID,
 		CoverArt:    s.CoverArt,
 		Duration:    s.Duration,
