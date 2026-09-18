@@ -115,6 +115,7 @@ func (t *scrobbleTee) record(user, client string, auth url.Values, recs []pendin
 		if song, ok := t.meta.get(ctx, pp.songID, auth); ok {
 			p.Title = song.Title
 			p.Artist = song.Artist
+			p.ArtistID = song.ArtistID
 			p.Album = song.Album
 			p.AlbumID = song.AlbumID
 			p.CoverArt = song.CoverArt

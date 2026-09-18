@@ -23,6 +23,7 @@ type recentsJSON struct {
 			Song []struct {
 				ID       string `json:"id"`
 				Title    string `json:"title"`
+				ArtistID string `json:"artistId"`
 				PlayedAt int64  `json:"playedAt"`
 			} `json:"song"`
 		} `json:"recentlyPlayed"`
@@ -33,7 +34,7 @@ func seedPlay(t *testing.T, st *store.Store, user, song, title string, at time.T
 	t.Helper()
 	if err := st.InsertPlay(context.Background(), store.Play{
 		User: user, SongID: song, PlayedAt: at, Client: "ios",
-		Title: title, Artist: "A", Album: "Alb", AlbumID: "al1", CoverArt: "ca1", Duration: 200,
+		Title: title, Artist: "A", ArtistID: "art-a", Album: "Alb", AlbumID: "al1", CoverArt: "ca1", Duration: 200,
 	}); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
@@ -75,6 +76,11 @@ func TestGetRecentlyPlayedValidAuthJSON(t *testing.T) {
 	}
 	if songs[1].PlayedAt != base.Unix() {
 		t.Errorf("playedAt not surfaced: %+v", songs[1])
+	}
+	// Regression: getRecentlyPlayed's Child previously carried no artistId at
+	// all, so "Go to Artist" silently failed for anything surfaced through it.
+	if songs[0].ArtistID != "art-a" || songs[1].ArtistID != "art-a" {
+		t.Errorf("artistId not surfaced: %+v", songs)
 	}
 }
 

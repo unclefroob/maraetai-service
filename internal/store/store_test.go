@@ -22,7 +22,7 @@ func TestInsertPlayRoundTripsFormat(t *testing.T) {
 	ctx := context.Background()
 	if err := st.InsertPlay(ctx, Play{
 		User: "alice", SongID: "flacsong", PlayedAt: time.Unix(1700000000, 0).UTC(),
-		Title: "Lossless", Artist: "A", Duration: 200,
+		Title: "Lossless", Artist: "A", ArtistID: "art-a", Duration: 200,
 		Suffix: "flac", ContentType: "audio/flac", BitRate: 1024,
 	}); err != nil {
 		t.Fatalf("insert: %v", err)
@@ -34,6 +34,12 @@ func TestInsertPlayRoundTripsFormat(t *testing.T) {
 	if got[0].Suffix != "flac" || got[0].ContentType != "audio/flac" || got[0].BitRate != 1024 {
 		t.Errorf("format not round-tripped: suffix=%q contentType=%q bitRate=%d",
 			got[0].Suffix, got[0].ContentType, got[0].BitRate)
+	}
+	// Regression: artist_id was added after the initial schema (via the
+	// migrate() ALTER TABLE loop, same as suffix/content_type/bit_rate) —
+	// confirm it round-trips on a fresh DB too, not just an upgraded one.
+	if got[0].ArtistID != "art-a" {
+		t.Errorf("artistId not round-tripped: got %q, want art-a", got[0].ArtistID)
 	}
 }
 

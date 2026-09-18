@@ -27,7 +27,7 @@ func fakeNavidrome(t *testing.T, scrobbleHits *int32) *httptest.Server {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{"subsonic-response":{"status":"ok","song":{
-			"id":"song123","title":"Teardrop","artist":"Massive Attack",
+			"id":"song123","title":"Teardrop","artist":"Massive Attack","artistId":"art-ma",
 			"album":"Mezzanine","albumId":"alb9","coverArt":"art9","duration":331,
 			"suffix":"flac","contentType":"audio/flac","bitRate":1024}}}`)
 	})
@@ -47,11 +47,11 @@ func fakeNavidrome(t *testing.T, scrobbleHits *int32) *httptest.Server {
 		switch r.URL.Query().Get("id") {
 		case "al1":
 			_, _ = io.WriteString(w, `{"subsonic-response":{"status":"ok","album":{"id":"al1","artistId":"art-ma","song":[
-				{"id":"s1","title":"Angel","artist":"Massive Attack","album":"Mezzanine","albumId":"al1","duration":379},
-				{"id":"s2","title":"Teardrop","artist":"Massive Attack","album":"Mezzanine","albumId":"al1","duration":331}]}}}`)
+				{"id":"s1","title":"Angel","artist":"Massive Attack","artistId":"art-ma","album":"Mezzanine","albumId":"al1","duration":379},
+				{"id":"s2","title":"Teardrop","artist":"Massive Attack","artistId":"art-ma","album":"Mezzanine","albumId":"al1","duration":331}]}}}`)
 		case "al2":
 			_, _ = io.WriteString(w, `{"subsonic-response":{"status":"ok","album":{"id":"al2","artistId":"art-port","song":[
-				{"id":"s3","title":"Glory Box","artist":"Portishead","album":"Dummy","albumId":"al2","duration":300}]}}}`)
+				{"id":"s3","title":"Glory Box","artist":"Portishead","artistId":"art-port","album":"Dummy","albumId":"al2","duration":300}]}}}`)
 		default:
 			_, _ = io.WriteString(w, `{"subsonic-response":{"status":"failed","error":{"code":70,"message":"not found"}}}`)
 		}
@@ -62,14 +62,14 @@ func fakeNavidrome(t *testing.T, scrobbleHits *int32) *httptest.Server {
 		switch r.URL.Query().Get("artist") {
 		case "Massive Attack":
 			_, _ = io.WriteString(w, `{"subsonic-response":{"status":"ok","topSongs":{"song":[
-				{"id":"ma1","title":"Angel","artist":"Massive Attack","album":"Mezzanine","albumId":"al1","duration":379},
-				{"id":"ma2","title":"Risingson","artist":"Massive Attack","album":"Mezzanine","albumId":"al1","duration":298}]}}}`)
+				{"id":"ma1","title":"Angel","artist":"Massive Attack","artistId":"art-ma","album":"Mezzanine","albumId":"al1","duration":379},
+				{"id":"ma2","title":"Risingson","artist":"Massive Attack","artistId":"art-ma","album":"Mezzanine","albumId":"al1","duration":298}]}}}`)
 		case "Portishead":
 			_, _ = io.WriteString(w, `{"subsonic-response":{"status":"ok","topSongs":{"song":[
-				{"id":"po1","title":"Roads","artist":"Portishead","album":"Dummy","albumId":"al2","duration":300}]}}}`)
+				{"id":"po1","title":"Roads","artist":"Portishead","artistId":"art-port","album":"Dummy","albumId":"al2","duration":300}]}}}`)
 		case "Tricky":
 			_, _ = io.WriteString(w, `{"subsonic-response":{"status":"ok","topSongs":{"song":[
-				{"id":"tr1","title":"Hell Is Round the Corner","artist":"Tricky","album":"Maxinquaye","albumId":"alX","duration":340}]}}}`)
+				{"id":"tr1","title":"Hell Is Round the Corner","artist":"Tricky","artistId":"art-tricky","album":"Maxinquaye","albumId":"alX","duration":340}]}}}`)
 		default:
 			_, _ = io.WriteString(w, `{"subsonic-response":{"status":"ok","topSongs":{"song":[]}}}`)
 		}
@@ -85,15 +85,15 @@ func fakeNavidrome(t *testing.T, scrobbleHits *int32) *httptest.Server {
 	mux.HandleFunc("/rest/getRandomSongs.view", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{"subsonic-response":{"status":"ok","randomSongs":{"song":[
-			{"id":"rnd1","title":"Random One","artist":"Someone","album":"X","albumId":"alR","duration":200},
-			{"id":"rnd2","title":"Random Two","artist":"Another","album":"Y","albumId":"alS","duration":210}]}}}`)
+			{"id":"rnd1","title":"Random One","artist":"Someone","artistId":"art-someone","album":"X","albumId":"alR","duration":200},
+			{"id":"rnd2","title":"Random Two","artist":"Another","artistId":"art-another","album":"Y","albumId":"alS","duration":210}]}}}`)
 	})
 	mux.HandleFunc("/rest/getStarred2.view", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{"subsonic-response":{"status":"ok","starred2":{"song":[
-			{"id":"fav1","title":"Loved Song","artist":"Fave","album":"F","albumId":"alF","duration":180},
-			{"id":"fav2","title":"Second Fave","artist":"Fave","album":"F","albumId":"alF","duration":200},
-			{"id":"fav3","title":"Third Fave","artist":"Fave","album":"F","albumId":"alF","duration":220}]}}}`)
+			{"id":"fav1","title":"Loved Song","artist":"Fave","artistId":"art-fave","album":"F","albumId":"alF","duration":180},
+			{"id":"fav2","title":"Second Fave","artist":"Fave","artistId":"art-fave","album":"F","albumId":"alF","duration":200},
+			{"id":"fav3","title":"Third Fave","artist":"Fave","artistId":"art-fave","album":"F","albumId":"alF","duration":220}]}}}`)
 	})
 	mux.HandleFunc("/rest/getArtists.view", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

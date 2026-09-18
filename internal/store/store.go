@@ -27,6 +27,7 @@ type Play struct {
 	// Metadata snapshot (best-effort; may be empty if upstream lookup failed).
 	Title       string
 	Artist      string
+	ArtistID    string
 	Album       string
 	AlbumID     string
 	CoverArt    string
@@ -100,6 +101,7 @@ CREATE INDEX IF NOT EXISTS idx_plays_user_time ON plays (user, played_at DESC);`
 		{"suffix", "ALTER TABLE plays ADD COLUMN suffix TEXT NOT NULL DEFAULT ''"},
 		{"content_type", "ALTER TABLE plays ADD COLUMN content_type TEXT NOT NULL DEFAULT ''"},
 		{"bit_rate", "ALTER TABLE plays ADD COLUMN bit_rate INTEGER NOT NULL DEFAULT 0"},
+		{"artist_id", "ALTER TABLE plays ADD COLUMN artist_id TEXT NOT NULL DEFAULT ''"},
 	} {
 		if s.hasColumn("plays", c.name) {
 			continue
@@ -124,11 +126,11 @@ func (s *Store) hasColumn(table, col string) bool {
 // InsertPlay records a single listen.
 func (s *Store) InsertPlay(ctx context.Context, p Play) error {
 	const q = `INSERT INTO plays
-        (user, song_id, played_at, client, title, artist, album, album_id, cover_art, duration, suffix, content_type, bit_rate)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        (user, song_id, played_at, client, title, artist, artist_id, album, album_id, cover_art, duration, suffix, content_type, bit_rate)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	_, err := s.db.ExecContext(ctx, q,
 		p.User, p.SongID, p.PlayedAt.Unix(), p.Client,
-		p.Title, p.Artist, p.Album, p.AlbumID, p.CoverArt, p.Duration,
+		p.Title, p.Artist, p.ArtistID, p.Album, p.AlbumID, p.CoverArt, p.Duration,
 		p.Suffix, p.ContentType, p.BitRate,
 	)
 	if err != nil {
@@ -143,7 +145,7 @@ func (s *Store) RecentlyPlayed(ctx context.Context, user string, limit, offset i
 	if limit <= 0 {
 		limit = 50
 	}
-	const q = `SELECT song_id, played_at, client, title, artist, album, album_id, cover_art, duration, suffix, content_type, bit_rate
+	const q = `SELECT song_id, played_at, client, title, artist, artist_id, album, album_id, cover_art, duration, suffix, content_type, bit_rate
         FROM plays WHERE user = ? ORDER BY played_at DESC, id DESC LIMIT ? OFFSET ?`
 	rows, err := s.db.QueryContext(ctx, q, user, limit, offset)
 	if err != nil {
@@ -155,7 +157,7 @@ func (s *Store) RecentlyPlayed(ctx context.Context, user string, limit, offset i
 	for rows.Next() {
 		var p Play
 		var ts int64
-		if err := rows.Scan(&p.SongID, &ts, &p.Client, &p.Title, &p.Artist,
+		if err := rows.Scan(&p.SongID, &ts, &p.Client, &p.Title, &p.Artist, &p.ArtistID,
 			&p.Album, &p.AlbumID, &p.CoverArt, &p.Duration, &p.Suffix, &p.ContentType, &p.BitRate); err != nil {
 			return nil, fmt.Errorf("scan recent: %w", err)
 		}
@@ -178,7 +180,7 @@ func (s *Store) RecentlyPlayedDistinct(ctx context.Context, user string, limit, 
 	if limit <= 0 {
 		limit = 50
 	}
-	const q = `SELECT song_id, MAX(played_at) AS pa, client, title, artist, album, album_id, cover_art, duration, suffix, content_type, bit_rate
+	const q = `SELECT song_id, MAX(played_at) AS pa, client, title, artist, artist_id, album, album_id, cover_art, duration, suffix, content_type, bit_rate
         FROM plays WHERE user = ?
         GROUP BY song_id
         ORDER BY pa DESC LIMIT ? OFFSET ?`
@@ -192,7 +194,7 @@ func (s *Store) RecentlyPlayedDistinct(ctx context.Context, user string, limit, 
 	for rows.Next() {
 		var p Play
 		var ts int64
-		if err := rows.Scan(&p.SongID, &ts, &p.Client, &p.Title, &p.Artist,
+		if err := rows.Scan(&p.SongID, &ts, &p.Client, &p.Title, &p.Artist, &p.ArtistID,
 			&p.Album, &p.AlbumID, &p.CoverArt, &p.Duration, &p.Suffix, &p.ContentType, &p.BitRate); err != nil {
 			return nil, fmt.Errorf("scan recent distinct: %w", err)
 		}
@@ -331,7 +333,7 @@ func (s *Store) OnRepeat(ctx context.Context, user string, since time.Time, minP
 	if minPlays <= 0 {
 		minPlays = 1
 	}
-	const q = `SELECT song_id, MAX(played_at) AS pa, client, title, artist, album, album_id, cover_art, duration, suffix, content_type, bit_rate, COUNT(*) AS plays
+	const q = `SELECT song_id, MAX(played_at) AS pa, client, title, artist, artist_id, album, album_id, cover_art, duration, suffix, content_type, bit_rate, COUNT(*) AS plays
         FROM plays WHERE user = ? AND played_at >= ?
         GROUP BY song_id
         HAVING plays >= ?
@@ -347,7 +349,7 @@ func (s *Store) OnRepeat(ctx context.Context, user string, since time.Time, minP
 	for rows.Next() {
 		var p Play
 		var ts int64
-		if err := rows.Scan(&p.SongID, &ts, &p.Client, &p.Title, &p.Artist,
+		if err := rows.Scan(&p.SongID, &ts, &p.Client, &p.Title, &p.Artist, &p.ArtistID,
 			&p.Album, &p.AlbumID, &p.CoverArt, &p.Duration, &p.Suffix, &p.ContentType, &p.BitRate, &p.Plays); err != nil {
 			return nil, fmt.Errorf("scan on-repeat: %w", err)
 		}

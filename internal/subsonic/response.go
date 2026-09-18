@@ -32,6 +32,7 @@ type Child struct {
 	Title    string `xml:"title,attr" json:"title"`
 	Album    string `xml:"album,attr,omitempty" json:"album,omitempty"`
 	Artist   string `xml:"artist,attr,omitempty" json:"artist,omitempty"`
+	ArtistID string `xml:"artistId,attr,omitempty" json:"artistId,omitempty"`
 	AlbumID  string `xml:"albumId,attr,omitempty" json:"albumId,omitempty"`
 	CoverArt string `xml:"coverArt,attr,omitempty" json:"coverArt,omitempty"`
 	Duration int    `xml:"duration,attr,omitempty" json:"duration,omitempty"`
