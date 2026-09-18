@@ -140,8 +140,8 @@ else
     [0:v]trim=${REM}:${DURATION},setpts=PTS-STARTPTS,fps=${FPS}[tail];
     [tail][head]xfade=transition=fade:duration=${XFADE}:offset=0[joined];
     [0:v]trim=${XFADE}:${REM},setpts=PTS-STARTPTS[mid];
-    [joined][mid]concat=n=2:v=1:a=0[out]
-  " -map "[out]" -an -c:v libx264 -preset medium -crf 18 "$OUT"
+    [joined][mid]concat=n=2:v=1:a=0,format=yuv420p[out]
+  " -map "[out]" -an -c:v libx264 -preset medium -profile:v high -level 4.1 -crf 18 "$OUT"
 fi
 
 echo "==> Wrote $OUT"
