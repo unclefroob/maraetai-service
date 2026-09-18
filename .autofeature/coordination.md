@@ -6,5 +6,5 @@
 **Ship order:** maraetai-service → maraetai
 
 **Per-repo status:**
-- maraetai-service: implemented (getTrackVideo endpoint, config/Dockerfile/compose wiring, curate-canvas.sh — all tests passing, go vet/gofmt clean)
-- maraetai: implementation in progress (swift-architect agent running)
+- maraetai-service: shipped — PR #27 (https://github.com/unclefroob/maraetai-service/pull/27)
+- maraetai: shipped as DRAFT — PR #86 (https://github.com/unclefroob/maraetai/pull/86) — never compiled, no Swift toolchain in this environment; needs a real Xcode build + simulator run + device QA before merge
