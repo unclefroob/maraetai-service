@@ -20,6 +20,7 @@ services:
       NAVIDROME_URL: http://navidrome:4533
       LISTEN_ADDR: ":4534"
       DB_PATH: /data/maraetai.db
+      VIDEOS_DIR: /data/videos
     volumes:
       - ./data/maraetai-service:/data
     ports:

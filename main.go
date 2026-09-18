@@ -42,9 +42,16 @@ func main() {
 	}
 	defer func() { _ = st.Close() }()
 
+	// The distroless runtime image has no shell (no `mkdir -p`), so the videos
+	// dir must be created here rather than assumed to exist on the volume.
+	if err := os.MkdirAll(cfg.VideosDir, 0o755); err != nil {
+		log.Error("videos dir", "err", err)
+		os.Exit(1)
+	}
+
 	srv := &http.Server{
 		Addr:              cfg.ListenAddr,
-		Handler:           proxy.New(cfg.NavidromeURL, st, cfg.NavidromePublicURL, log),
+		Handler:           proxy.New(cfg.NavidromeURL, st, cfg.NavidromePublicURL, cfg.VideosDir, log),
 		ReadHeaderTimeout: 10 * time.Second,
 		// No write timeout: audio streams are long-lived.
 	}

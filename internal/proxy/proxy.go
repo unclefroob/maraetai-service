@@ -27,7 +27,11 @@ import (
 //
 // navidromePublicURL is an optional browser-reachable Navidrome URL surfaced to
 // the web app (admin "manage users" link-out); empty disables the link.
-func New(upstream *url.URL, st *store.Store, navidromePublicURL string, log *slog.Logger) http.Handler {
+//
+// videosDir is where curated background-video clips live (named
+// <songId>.mp4 / <albumId>.mp4), served by getTrackVideo. An empty string is
+// fine — the handler simply never finds a file and every request 404s.
+func New(upstream *url.URL, st *store.Store, navidromePublicURL string, videosDir string, log *slog.Logger) http.Handler {
 	rp := httputil.NewSingleHostReverseProxy(upstream)
 
 	// FlushInterval -1 flushes writes to the client immediately, so audio
@@ -132,6 +136,13 @@ func New(upstream *url.URL, st *store.Store, navidromePublicURL string, log *slo
 	artists := newArtistsHandler(auth.NewValidator(upstream), navidrome.New(upstream), log)
 	mux.Handle("/rest/getArtistList", artists)
 	mux.Handle("/rest/getArtistList.view", artists)
+
+	// getTrackVideo: a self-curated background video clip for the current
+	// track (or its album), if one exists in videosDir. Auth-only, no play
+	// store — existence is a filesystem check, not a DB row.
+	trackVideo := newTrackVideoHandler(auth.NewValidator(upstream), navidrome.New(upstream), videosDir, log)
+	mux.Handle("/rest/getTrackVideo", trackVideo)
+	mux.Handle("/rest/getTrackVideo.view", trackVideo)
 
 	// search3/search2: forwarded upstream, but with lyrics-blob "artists"
 	// stripped from the result. Mistagged files can put a whole LRC sheet in

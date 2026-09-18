@@ -62,14 +62,7 @@ func (h *favouritesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	offset := clampInt(q.Get("offset"), 0, 0, 1<<30)
 	count := clampInt(q.Get("count"), favDefaultCount, 1, favMaxCount)
 
-	authParams := url.Values{}
-	for _, k := range []string{"u", "t", "s", "p", "c", "v"} {
-		if v := q.Get(k); v != "" {
-			authParams.Set(k, v)
-		}
-	}
-
-	songs, err := h.starred(r.Context(), user, authParams)
+	songs, err := h.starred(r.Context(), user, authParams(q))
 	if err != nil {
 		h.log.Error("favourites: starred lookup failed", "user", user, "err", err)
 		subsonic.WriteError(w, q, subsonic.ErrGeneric, "Could not load favourites")
